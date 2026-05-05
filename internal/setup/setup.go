@@ -70,6 +70,55 @@ func EnsureGlobalConfig() (string, error) {
 	return cfgPath, nil
 }
 
+// ForcePromptAPIKey always prompts the user for a new API key,
+// regardless of whether one is already configured. Overwrites the
+// existing key in the config file.
+func ForcePromptAPIKey(cfgPath string) (string, error) {
+	raw, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return "", err
+	}
+
+	// Show existing key if present
+	var cfgMap map[string]any
+	if err := json.Unmarshal(raw, &cfgMap); err != nil {
+		return "", fmt.Errorf("failed to parse config: %w", err)
+	}
+	existingKey := extractAPIKey(cfgMap)
+	existingRaw := strings.TrimPrefix(existingKey, apiKeyPrefix)
+	if existingRaw != "" && !strings.HasPrefix(existingRaw, "$") {
+		masked := existingRaw
+		if len(masked) > 8 {
+			masked = masked[:4] + strings.Repeat("*", len(masked)-8) + masked[len(masked)-4:]
+		}
+		fmt.Printf("\nCurrent API Key: %s\n", masked)
+	}
+
+	fmt.Print("Enter new API Key (leave empty to keep current): ")
+
+	var input string
+	if _, err := fmt.Scanln(&input); err != nil && err.Error() != "unexpected newline" {
+		return "", fmt.Errorf("failed to read API key: %w", err)
+	}
+	input = strings.TrimSpace(input)
+	input = strings.TrimPrefix(input, apiKeyPrefix)
+
+	// If empty, keep existing key
+	if input == "" {
+		if existingRaw != "" && !strings.HasPrefix(existingRaw, "$") {
+			return existingRaw, nil
+		}
+		return "", fmt.Errorf("API key cannot be empty")
+	}
+
+	if err := writeAPIKey(cfgPath, raw, input); err != nil {
+		return "", err
+	}
+
+	fmt.Println("API Key saved to config.")
+	return input, nil
+}
+
 // ReadOrPromptAPIKey reads the API key from config. If empty, prompts
 // the user to enter one and writes it back to the config file.
 // Returns the raw key (without "Bearer " prefix) for use in API calls.
@@ -210,10 +259,10 @@ func WriteModelsToConfig(cfgPath string, models []ModelInfo) error {
 	modelDefs := make([]map[string]any, len(models))
 	for i, m := range models {
 		modelDefs[i] = map[string]any{
-			"id":                  m.ID,
-			"name":                m.ID,
-			"context_window":      200000,
-			"default_max_tokens":  16384,
+			"id":                   m.ID,
+			"name":                 m.ID,
+			"context_window":       200000,
+			"default_max_tokens":   16384,
 			"supports_attachments": true,
 		}
 	}

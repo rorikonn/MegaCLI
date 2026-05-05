@@ -18,6 +18,68 @@ var (
 	errStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 )
 
+// RunForce executes the setup flow unconditionally, overwriting existing
+// configuration. Used by the --startup flag to allow re-configuration.
+func RunForce() (bool, error) {
+	fmt.Println(bannerStyle.Render("\n  MegaCli — Setup (forced)\n"))
+
+	// Step 1: global config
+	cfgPath, err := EnsureGlobalConfig()
+	if err != nil {
+		return false, err
+	}
+	fmt.Println(okStyle.Render("  ✓ ") + infoStyle.Render("Config: "+cfgPath))
+
+	// Step 2: always prompt for API key (overwrite existing)
+	apiKey, err := ForcePromptAPIKey(cfgPath)
+	if err != nil {
+		return false, err
+	}
+	masked := apiKey
+	if len(masked) > 8 {
+		masked = masked[:4] + strings.Repeat("*", len(masked)-8) + masked[len(masked)-4:]
+	}
+	fmt.Println(okStyle.Render("  ✓ ") + infoStyle.Render("API Key: "+masked))
+
+	// Step 3: always re-fetch and re-select models
+	fmt.Println(infoStyle.Render("\n  Fetching available models from " + modelsEndpoint + " ..."))
+
+	models, err := FetchModels(apiKey)
+	if err != nil {
+		fmt.Println(errStyle.Render("  ✗ Failed to fetch models: " + err.Error()))
+		return false, err
+	}
+
+	if len(models) == 0 {
+		fmt.Println(errStyle.Render("  ✗ No models available from the API"))
+		return false, fmt.Errorf("no models returned by API")
+	}
+
+	fmt.Printf("  Found %d models. Select which to enable:\n\n", len(models))
+
+	selected, err := RunModelPicker(models)
+	if err != nil {
+		return false, err
+	}
+
+	large, small, err := runModelRolePicker(selected)
+	if err != nil {
+		return false, err
+	}
+
+	if err := WriteModelsToConfig(cfgPath, selected); err != nil {
+		return false, fmt.Errorf("failed to save models: %w", err)
+	}
+
+	if err := writeModelSelections(cfgPath, large, small); err != nil {
+		return false, fmt.Errorf("failed to save model selections: %w", err)
+	}
+
+	fmt.Printf("\n"+okStyle.Render("  ✓ ")+"Enabled %d models (large: %s, small: %s)\n", len(selected), large, small)
+	fmt.Println(okStyle.Render("\n  Setup complete! Configuration has been updated.\n"))
+	return true, nil
+}
+
 // Run executes the full first-run setup flow:
 //  1. Ensure global config exists
 //  2. Read or prompt for API key

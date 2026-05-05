@@ -25,6 +25,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/lipgloss/v2"
+	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/ultraviolet/layout"
+	"github.com/charmbracelet/ultraviolet/screen"
+	"github.com/charmbracelet/x/editor"
+	xstrings "github.com/charmbracelet/x/exp/strings"
 	"github.com/megacli/megacli/internal/agent/hyper"
 	"github.com/megacli/megacli/internal/agent/notify"
 	agenttools "github.com/megacli/megacli/internal/agent/tools"
@@ -35,13 +40,13 @@ import (
 	"github.com/megacli/megacli/internal/fsext"
 	"github.com/megacli/megacli/internal/history"
 	"github.com/megacli/megacli/internal/home"
+	"github.com/megacli/megacli/internal/megatool"
 	"github.com/megacli/megacli/internal/message"
 	"github.com/megacli/megacli/internal/permission"
 	"github.com/megacli/megacli/internal/pubsub"
 	"github.com/megacli/megacli/internal/session"
 	"github.com/megacli/megacli/internal/skills"
 	"github.com/megacli/megacli/internal/ui/anim"
-	"github.com/megacli/megacli/internal/megatool"
 	"github.com/megacli/megacli/internal/ui/attachments"
 	"github.com/megacli/megacli/internal/ui/chat"
 	"github.com/megacli/megacli/internal/ui/common"
@@ -49,19 +54,14 @@ import (
 	"github.com/megacli/megacli/internal/ui/dashboard"
 	"github.com/megacli/megacli/internal/ui/dialog"
 	"github.com/megacli/megacli/internal/ui/display"
-	"github.com/megacli/megacli/internal/ui/instances"
 	fimage "github.com/megacli/megacli/internal/ui/image"
+	"github.com/megacli/megacli/internal/ui/instances"
 	"github.com/megacli/megacli/internal/ui/logo"
 	"github.com/megacli/megacli/internal/ui/notification"
 	"github.com/megacli/megacli/internal/ui/styles"
 	"github.com/megacli/megacli/internal/ui/util"
 	"github.com/megacli/megacli/internal/version"
 	"github.com/megacli/megacli/internal/workspace"
-	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/charmbracelet/ultraviolet/layout"
-	"github.com/charmbracelet/ultraviolet/screen"
-	"github.com/charmbracelet/x/editor"
-	xstrings "github.com/charmbracelet/x/exp/strings"
 )
 
 // MouseScrollThreshold defines how many lines to scroll the chat when a mouse
@@ -898,6 +898,15 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if ttl <= 0 {
 			ttl = DefaultStatusTTL
 		}
+		cmds = append(cmds, clearInfoMsgCmd(ttl))
+	case app.UpdateAppliedMsg:
+		text := fmt.Sprintf("MegaCLI updated to v%s. Restarting is recommended.", msg.Version)
+		ttl := 30 * time.Second
+		m.status.SetInfoMsg(util.InfoMsg{
+			Type: util.InfoTypeUpdate,
+			Msg:  text,
+			TTL:  ttl,
+		})
 		cmds = append(cmds, clearInfoMsgCmd(ttl))
 	case app.UpdateAvailableMsg:
 		text := fmt.Sprintf("Crush update available: v%s → v%s.", msg.CurrentVersion, msg.LatestVersion)

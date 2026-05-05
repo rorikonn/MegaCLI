@@ -22,6 +22,11 @@ import (
 	fang "charm.land/fang/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
+	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/exp/charmtone"
+	xstrings "github.com/charmbracelet/x/exp/strings"
+	"github.com/charmbracelet/x/term"
 	"github.com/megacli/megacli/internal/app"
 	"github.com/megacli/megacli/internal/client"
 	"github.com/megacli/megacli/internal/config"
@@ -35,13 +40,9 @@ import (
 	"github.com/megacli/megacli/internal/setup"
 	"github.com/megacli/megacli/internal/ui/common"
 	ui "github.com/megacli/megacli/internal/ui/model"
+	"github.com/megacli/megacli/internal/update"
 	"github.com/megacli/megacli/internal/version"
 	"github.com/megacli/megacli/internal/workspace"
-	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/charmbracelet/x/ansi"
-	"github.com/charmbracelet/x/exp/charmtone"
-	xstrings "github.com/charmbracelet/x/exp/strings"
-	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 )
 
@@ -56,6 +57,8 @@ func init() {
 	rootCmd.Flags().BoolP("yolo", "y", false, "Automatically accept all permissions (dangerous mode)")
 	rootCmd.Flags().StringP("session", "s", "", "Continue a previous session by ID")
 	rootCmd.Flags().BoolP("continue", "C", false, "Continue the most recent session")
+	rootCmd.Flags().Bool("startup", false, "Force re-run the startup setup (API key + model selection)")
+	rootCmd.Flags().Bool("update", false, "Update MegaCLI to the latest version")
 	rootCmd.MarkFlagsMutuallyExclusive("session", "continue")
 
 	rootCmd.AddCommand(
@@ -104,6 +107,40 @@ crush --continue
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionID, _ := cmd.Flags().GetString("session")
 		continueLast, _ := cmd.Flags().GetBool("continue")
+		forceStartup, _ := cmd.Flags().GetBool("startup")
+		manualUpdate, _ := cmd.Flags().GetBool("update")
+
+		if manualUpdate {
+			ctx := cmd.Context()
+			fmt.Println("Checking for updates...")
+			info, err := update.Check(ctx, version.Version, update.Default)
+			if err != nil {
+				return fmt.Errorf("failed to check for updates: %w", err)
+			}
+			if !info.Available() {
+				fmt.Printf("MegaCLI v%s is already the latest version.\n", info.Current)
+				return nil
+			}
+			fmt.Printf("Updating from v%s to v%s...\n", info.Current, info.Latest)
+			updCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			defer cancel()
+			newVersion, err := update.Apply(updCtx, info.Latest)
+			if err != nil {
+				return fmt.Errorf("update failed: %w", err)
+			}
+			fmt.Printf("Updated to v%s. Restart MegaCLI to use the new version.\n", newVersion)
+			return nil
+		}
+
+		if forceStartup {
+			if ok, err := setup.RunForce(); !ok || err != nil {
+				if err != nil {
+					return fmt.Errorf("setup failed: %w", err)
+				}
+				return fmt.Errorf("setup was not completed")
+			}
+			return nil
+		}
 
 		if setup.NeedsSetup() {
 			if ok, err := setup.Run(); !ok || err != nil {

@@ -18,6 +18,9 @@ import (
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/exp/charmtone"
+	"github.com/charmbracelet/x/term"
 	"github.com/megacli/megacli/internal/agent"
 	"github.com/megacli/megacli/internal/agent/notify"
 	"github.com/megacli/megacli/internal/agent/tools/mcp"
@@ -42,9 +45,6 @@ import (
 	"github.com/megacli/megacli/internal/ui/styles"
 	"github.com/megacli/megacli/internal/update"
 	"github.com/megacli/megacli/internal/version"
-	"github.com/charmbracelet/x/ansi"
-	"github.com/charmbracelet/x/exp/charmtone"
-	"github.com/charmbracelet/x/term"
 )
 
 // UpdateAvailableMsg is sent when a new version is available.
@@ -52,6 +52,12 @@ type UpdateAvailableMsg struct {
 	CurrentVersion string
 	LatestVersion  string
 	IsDevelopment  bool
+}
+
+// UpdateAppliedMsg is sent when an update has been applied and a restart
+// is needed to use the new version.
+type UpdateAppliedMsg struct {
+	Version string
 }
 
 type App struct {
@@ -64,8 +70,8 @@ type App struct {
 	AgentCoordinator agent.Coordinator
 
 	// MegaCli extensions
-	Orchestrator    *orchestrator.Orchestrator
-	IPCManager      *ipc.Manager
+	Orchestrator     *orchestrator.Orchestrator
+	IPCManager       *ipc.Manager
 	MegaToolRegistry *megatool.Registry
 
 	LSPManager *lsp.Manager
@@ -677,7 +683,7 @@ func (app *App) Shutdown() {
 	wg.Wait()
 }
 
-// checkForUpdates checks for available updates.
+// checkForUpdates checks for available updates and automatically applies them.
 func (app *App) checkForUpdates(ctx context.Context) {
 	checkCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -686,10 +692,30 @@ func (app *App) checkForUpdates(ctx context.Context) {
 	if err != nil || !info.Available() {
 		return
 	}
-	app.events.Publish(pubsub.UpdatedEvent, UpdateAvailableMsg{
-		CurrentVersion: info.Current,
-		LatestVersion:  info.Latest,
-		IsDevelopment:  info.IsDevelopment(),
+
+	// Try auto-update
+	slog.Info("Update available, applying auto-update",
+		"current", info.Current,
+		"latest", info.Latest,
+	)
+
+	updCtx, updCancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer updCancel()
+
+	newVersion, err := update.Apply(updCtx, info.Latest)
+	if err != nil {
+		slog.Warn("Auto-update failed, notifying user", "error", err)
+		app.events.Publish(pubsub.UpdatedEvent, UpdateAvailableMsg{
+			CurrentVersion: info.Current,
+			LatestVersion:  info.Latest,
+			IsDevelopment:  info.IsDevelopment(),
+		})
+		return
+	}
+
+	slog.Info("Updated to new version, restart to apply", "version", newVersion)
+	app.events.Publish(pubsub.UpdatedEvent, UpdateAppliedMsg{
+		Version: newVersion,
 	})
 }
 
