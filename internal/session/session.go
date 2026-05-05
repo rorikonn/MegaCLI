@@ -216,22 +216,42 @@ func (s *service) Save(ctx context.Context, session Session) (Session, error) {
 // UpdateTitleAndUsage updates only the title and usage fields atomically.
 // This is safer than fetching, modifying, and saving the entire session.
 func (s *service) UpdateTitleAndUsage(ctx context.Context, sessionID, title string, promptTokens, completionTokens int64, cost float64) error {
-	return s.q.UpdateSessionTitleAndUsage(ctx, db.UpdateSessionTitleAndUsageParams{
+	err := s.q.UpdateSessionTitleAndUsage(ctx, db.UpdateSessionTitleAndUsageParams{
 		ID:               sessionID,
 		Title:            title,
 		PromptTokens:     promptTokens,
 		CompletionTokens: completionTokens,
 		Cost:             cost,
 	})
+	if err != nil {
+		return err
+	}
+	session, err := s.Get(ctx, sessionID)
+	if err != nil {
+		slog.Error("Failed to get session after title update", "error", err)
+		return nil // Don't fail the update if we can't publish.
+	}
+	s.Publish(pubsub.UpdatedEvent, session)
+	return nil
 }
 
 // Rename updates only the title of a session without touching updated_at or
 // usage fields.
 func (s *service) Rename(ctx context.Context, id string, title string) error {
-	return s.q.RenameSession(ctx, db.RenameSessionParams{
+	err := s.q.RenameSession(ctx, db.RenameSessionParams{
 		ID:    id,
 		Title: title,
 	})
+	if err != nil {
+		return err
+	}
+	session, err := s.Get(ctx, id)
+	if err != nil {
+		slog.Error("Failed to get session after rename", "error", err)
+		return nil // Don't fail the rename if we can't publish.
+	}
+	s.Publish(pubsub.UpdatedEvent, session)
+	return nil
 }
 
 func (s *service) List(ctx context.Context) ([]Session, error) {
