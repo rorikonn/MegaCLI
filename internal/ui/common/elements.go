@@ -33,9 +33,13 @@ func FormatReasoningEffort(effort string) string {
 
 // ModelContextInfo contains token usage and cost information for a model.
 type ModelContextInfo struct {
-	ContextUsed  int64
-	ModelContext int64
-	Cost         float64
+	ContextUsed         int64
+	ModelContext         int64
+	Cost                float64
+	InputTokens         int64
+	OutputTokens        int64
+	CacheCreationTokens int64
+	CacheReadTokens     int64
 }
 
 // ModelInfo renders model information including name, provider, reasoning
@@ -76,6 +80,11 @@ func ModelInfo(t *styles.Styles, modelName, providerName, reasoningInfo string, 
 	if context != nil {
 		formattedInfo := formatTokensAndCost(t, context.ContextUsed, context.ModelContext, context.Cost)
 		parts = append(parts, lipgloss.NewStyle().PaddingLeft(2).Render(formattedInfo))
+
+		detailLine := formatTokenDetails(t, context)
+		if detailLine != "" {
+			parts = append(parts, lipgloss.NewStyle().PaddingLeft(2).Render(detailLine))
+		}
 	}
 
 	if providerName == hyper.DisplayName && hyperCredits != nil {
@@ -122,6 +131,41 @@ func formatTokensAndCost(t *styles.Styles, tokens, contextWindow int64, cost flo
 	}
 
 	return fmt.Sprintf("%s %s", formattedTokens, formattedCost)
+}
+
+// formatTokenDetails renders per-line breakdown of Input/Output/Cache tokens.
+func formatTokenDetails(t *styles.Styles, ctx *ModelContextInfo) string {
+	if ctx.InputTokens == 0 && ctx.OutputTokens == 0 {
+		return ""
+	}
+
+	dim := t.ModelInfo.TokenCount
+	label := t.ModelInfo.TokenPercentage
+
+	lines := []string{
+		label.Render("Input   ") + dim.Render(compactTokens(ctx.InputTokens)),
+		label.Render("Output  ") + dim.Render(compactTokens(ctx.OutputTokens)),
+	}
+
+	if ctx.CacheCreationTokens > 0 || ctx.CacheReadTokens > 0 {
+		lines = append(lines,
+			label.Render("C.Hit   ")+dim.Render(compactTokens(ctx.CacheReadTokens)),
+			label.Render("C.Write ")+dim.Render(compactTokens(ctx.CacheCreationTokens)),
+		)
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func compactTokens(n int64) string {
+	switch {
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
+	case n >= 1_000:
+		return fmt.Sprintf("%.1fK", float64(n)/1_000)
+	default:
+		return fmt.Sprintf("%d", n)
+	}
 }
 
 // FormatCredits formats an integer with comma separators for thousands.

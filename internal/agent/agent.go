@@ -121,6 +121,8 @@ type sessionAgent struct {
 
 	messageQueue   *csync.Map[string, []SessionAgentCall]
 	activeRequests *csync.Map[string, context.CancelFunc]
+
+	tokenAccum *csync.Map[string, session.TokenAccum]
 }
 
 type SessionAgentOptions struct {
@@ -154,6 +156,7 @@ func NewSessionAgent(
 		notify:               opts.Notify,
 		messageQueue:         csync.NewMap[string, []SessionAgentCall](),
 		activeRequests:       csync.NewMap[string, context.CancelFunc](),
+		tokenAccum:           csync.NewMap[string, session.TokenAccum](),
 	}
 }
 
@@ -1076,6 +1079,18 @@ func (a *sessionAgent) updateSessionUsage(model Model, session *session.Session,
 
 	session.CompletionTokens = usage.OutputTokens
 	session.PromptTokens = usage.InputTokens + usage.CacheReadTokens
+
+	accum, _ := a.tokenAccum.Get(session.ID)
+	accum.InputTokens += usage.InputTokens
+	accum.OutputTokens += usage.OutputTokens
+	accum.CacheCreationTokens += usage.CacheCreationTokens
+	accum.CacheReadTokens += usage.CacheReadTokens
+	a.tokenAccum.Set(session.ID, accum)
+
+	session.InputTokens = accum.InputTokens
+	session.OutputTokens = accum.OutputTokens
+	session.CacheCreationTokens = accum.CacheCreationTokens
+	session.CacheReadTokens = accum.CacheReadTokens
 }
 
 func (a *sessionAgent) Cancel(sessionID string) {

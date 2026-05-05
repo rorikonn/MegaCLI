@@ -1896,10 +1896,11 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 				}
 
 			case key.Matches(msg, m.keyMap.Editor.PasteImage):
-				if !m.currentModelSupportsImages() {
-					break
+				if m.currentModelSupportsImages() {
+					cmds = append(cmds, m.pasteImageFromClipboard)
+				} else {
+					cmds = append(cmds, m.pasteTextFromClipboard)
 				}
-				cmds = append(cmds, m.pasteImageFromClipboard)
 
 			case key.Matches(msg, m.keyMap.Editor.SendMessage):
 				prevHeight := m.textarea.Height()
@@ -2517,14 +2518,21 @@ func (m *UI) FullHelp() [][]key.Binding {
 func (m *UI) currentModelSupportsImages() bool {
 	cfg := m.com.Config()
 	if cfg == nil {
+		slog.Warn("currentModelSupportsImages: config is nil")
 		return false
 	}
 	agentCfg, ok := cfg.Agents[config.AgentCoder]
 	if !ok {
+		slog.Warn("currentModelSupportsImages: agent config not found", "agent", config.AgentCoder)
 		return false
 	}
 	model := cfg.GetModelByType(agentCfg.Model)
-	return model != nil && model.SupportsImages
+	if model == nil {
+		slog.Warn("currentModelSupportsImages: model not found", "model_type", agentCfg.Model)
+		return false
+	}
+	slog.Info("currentModelSupportsImages", "model_id", model.ID, "supports_images", model.SupportsImages)
+	return model.SupportsImages
 }
 
 // toggleCompactMode toggles compact mode between uiChat and uiChatCompact states.
@@ -3505,6 +3513,12 @@ func (m *UI) handlePasteMsg(msg tea.PasteMsg) tea.Cmd {
 		return nil
 	}
 
+	// If paste content is empty, the terminal may have intercepted Ctrl+V but
+	// found no text on the clipboard. Try reading image data directly.
+	if msg.Content == "" && m.currentModelSupportsImages() {
+		return m.pasteImageFromClipboard
+	}
+
 	if hasPasteExceededThreshold(msg) {
 		return func() tea.Msg {
 			content := []byte(msg.Content)
@@ -3609,11 +3623,27 @@ func (m *UI) handleFilePathPaste(path string) tea.Cmd {
 	}
 }
 
+// pasteTextFromClipboard reads text from the system clipboard and returns it
+// as a PasteMsg for insertion into the textarea.
+func (m *UI) pasteTextFromClipboard() tea.Msg {
+	textData, err := readClipboard(clipboardFormatText)
+	if err != nil || len(textData) == 0 {
+		return nil
+	}
+	return tea.PasteMsg{Content: string(textData)}
+}
+
 // pasteImageFromClipboard reads image data from the system clipboard and
 // creates an attachment. If no image data is found, it falls back to
 // interpreting clipboard text as a file path.
 func (m *UI) pasteImageFromClipboard() tea.Msg {
+	slog.Info("pasteImageFromClipboard: attempting to read image from clipboard")
 	imageData, err := readClipboard(clipboardFormatImage)
+	if err != nil {
+		slog.Warn("pasteImageFromClipboard: readClipboard image failed", "error", err)
+	} else {
+		slog.Info("pasteImageFromClipboard: readClipboard image success", "size", len(imageData))
+	}
 	if int64(len(imageData)) > common.MaxAttachmentSize {
 		return util.InfoMsg{
 			Type: util.InfoTypeError,
@@ -3638,7 +3668,8 @@ func (m *UI) pasteImageFromClipboard() tea.Msg {
 	path := strings.TrimSpace(string(textData))
 	path = strings.ReplaceAll(path, "\\ ", " ")
 	if _, statErr := os.Stat(path); statErr != nil {
-		return nil // Clipboard does not contain an image or valid file path
+		// Not an image and not a valid file path; fall back to text paste.
+		return tea.PasteMsg{Content: string(textData)}
 	}
 
 	lowerPath := strings.ToLower(path)

@@ -86,7 +86,9 @@ internal/
 
 ## Build/Test/Lint Commands
 
-- **Build**: `go build .` or `go run .`
+- **Build**: `go build -o megacli.exe .` (ALWAYS build `megacli.exe` after
+  any code change so the user can immediately test)
+- **Build (alt)**: `go run .`
 - **Test**: `task test` or `go test ./...` (run single test:
   `go test ./internal/llm/prompt -run TestGetContextFromPaths`)
 - **Update Golden Files**: `go test ./... -update` (regenerates `.golden`

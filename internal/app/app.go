@@ -693,6 +693,15 @@ func (app *App) checkForUpdates(ctx context.Context) {
 		return
 	}
 
+	// Don't auto-update dev builds — the user built this locally.
+	if info.IsDevelopment() {
+		slog.Info("Skipping auto-update for development build",
+			"current", info.Current,
+			"latest", info.Latest,
+		)
+		return
+	}
+
 	// Try auto-update
 	slog.Info("Update available, applying auto-update",
 		"current", info.Current,

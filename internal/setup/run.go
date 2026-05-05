@@ -301,13 +301,15 @@ func writeModelSelections(cfgPath, large, small string) error {
 		return err
 	}
 
+	largeProvider := providerIDForType(modelTypeDetect(large))
+	smallProvider := providerIDForType(modelTypeDetect(small))
 	cfgMap["models"] = map[string]any{
 		"large": map[string]any{
-			"provider": defaultProviderID,
+			"provider": largeProvider,
 			"model":    large,
 		},
 		"small": map[string]any{
-			"provider": defaultProviderID,
+			"provider": smallProvider,
 			"model":    small,
 		},
 	}

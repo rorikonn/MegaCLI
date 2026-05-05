@@ -58,6 +58,12 @@ type Session struct {
 	Todos            []Todo
 	CreatedAt        int64
 	UpdatedAt        int64
+
+	// In-memory only fields for detailed token breakdown (not persisted to DB).
+	InputTokens         int64
+	OutputTokens        int64
+	CacheCreationTokens int64
+	CacheReadTokens     int64
 }
 
 type Service interface {
@@ -181,6 +187,8 @@ func (s *service) Save(ctx context.Context, session Session) (Session, error) {
 		return Session{}, err
 	}
 
+	inMem := session.inMemoryTokens()
+
 	dbSession, err := s.q.UpdateSession(ctx, db.UpdateSessionParams{
 		ID:               session.ID,
 		Title:            session.Title,
@@ -200,6 +208,7 @@ func (s *service) Save(ctx context.Context, session Session) (Session, error) {
 		return Session{}, err
 	}
 	session = s.fromDBItem(dbSession)
+	session.restoreInMemoryTokens(inMem)
 	s.Publish(pubsub.UpdatedEvent, session)
 	return session, nil
 }
@@ -255,6 +264,47 @@ func (s service) fromDBItem(item db.Session) Session {
 		CreatedAt:        item.CreatedAt,
 		UpdatedAt:        item.UpdatedAt,
 	}
+}
+
+type inMemTokens struct {
+	Input         int64
+	Output        int64
+	CacheCreation int64
+	CacheRead     int64
+}
+
+// TokenAccum holds cumulative token counts across the lifetime of a session.
+type TokenAccum struct {
+	InputTokens         int64
+	OutputTokens        int64
+	CacheCreationTokens int64
+	CacheReadTokens     int64
+}
+
+func (s *Session) inMemoryTokens() inMemTokens {
+	return inMemTokens{
+		Input:         s.InputTokens,
+		Output:        s.OutputTokens,
+		CacheCreation: s.CacheCreationTokens,
+		CacheRead:     s.CacheReadTokens,
+	}
+}
+
+func (s *Session) restoreInMemoryTokens(t inMemTokens) {
+	s.InputTokens = t.Input
+	s.OutputTokens = t.Output
+	s.CacheCreationTokens = t.CacheCreation
+	s.CacheReadTokens = t.CacheRead
+}
+
+// RestoreInMemoryTokensFrom copies cumulative in-memory token fields from
+// another session. Use after reloading a session from DB to preserve running
+// totals.
+func (s *Session) RestoreInMemoryTokensFrom(src *Session) {
+	s.InputTokens = src.InputTokens
+	s.OutputTokens = src.OutputTokens
+	s.CacheCreationTokens = src.CacheCreationTokens
+	s.CacheReadTokens = src.CacheReadTokens
 }
 
 func marshalTodos(todos []Todo) (string, error) {

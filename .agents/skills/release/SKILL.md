@@ -87,12 +87,12 @@ Or visit: `https://github.com/rorikonn/MegaCLI/actions`
 
 **Windows:**
 ```powershell
-irm https://raw.githubusercontent.com/rorikonn/MegaCLI/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/rorikonn/MegaCLI/master/scripts/install.ps1 | iex
 ```
 
 **macOS / Linux:**
 ```bash
-curl -sSf https://raw.githubusercontent.com/rorikonn/MegaCLI/main/scripts/install.sh | sh
+curl -sSf https://raw.githubusercontent.com/rorikonn/MegaCLI/master/scripts/install.sh | sh
 ```
 
 ## Troubleshooting

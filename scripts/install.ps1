@@ -1,5 +1,5 @@
 # MegaCLI installer for Windows
-# Usage: irm https://raw.githubusercontent.com/rorikonn/MegaCLI/main/scripts/install.ps1 | iex
+# Usage: irm https://raw.githubusercontent.com/rorikonn/MegaCLI/master/scripts/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
 
@@ -13,11 +13,20 @@ function Get-LatestVersion {
 }
 
 function Get-Architecture {
-    $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+    $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
     switch ($arch) {
         "X64"   { return "x86_64" }
+        "X86"   { return "x86_64" }
         "Arm64" { return "arm64" }
-        default { throw "Unsupported architecture: $arch" }
+        default {
+            # Fallback: check PROCESSOR_ARCHITECTURE env var
+            $envArch = $env:PROCESSOR_ARCHITECTURE
+            switch ($envArch) {
+                "AMD64" { return "x86_64" }
+                "ARM64" { return "arm64" }
+                default { throw "Unsupported architecture: $arch ($envArch)" }
+            }
+        }
     }
 }
 

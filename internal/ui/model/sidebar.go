@@ -44,9 +44,13 @@ func (m *UI) modelInfo(width int) string {
 	var modelContext *common.ModelContextInfo
 	if model != nil && m.session != nil {
 		modelContext = &common.ModelContextInfo{
-			ContextUsed:  m.session.CompletionTokens + m.session.PromptTokens,
-			Cost:         m.session.Cost,
-			ModelContext: model.CatwalkCfg.ContextWindow,
+			ContextUsed:         m.session.CompletionTokens + m.session.PromptTokens,
+			Cost:                m.session.Cost,
+			ModelContext:         model.CatwalkCfg.ContextWindow,
+			InputTokens:         m.session.InputTokens,
+			OutputTokens:        m.session.OutputTokens,
+			CacheCreationTokens: m.session.CacheCreationTokens,
+			CacheReadTokens:     m.session.CacheReadTokens,
 		}
 	}
 	var modelName string

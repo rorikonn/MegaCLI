@@ -1,4 +1,4 @@
-//go:build (linux || darwin || windows) && !arm && !386 && !ios && !android
+//go:build (linux || darwin) && !arm && !386 && !ios && !android
 
 package model
 

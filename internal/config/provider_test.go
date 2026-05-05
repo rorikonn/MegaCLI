@@ -105,7 +105,7 @@ func TestProviders_Integration_WithCachedData(t *testing.T) {
 	catwalkPath := tmpDir + "/megacli/providers.json"
 	hyperPath := tmpDir + "/megacli/hyper.json"
 
-	require.NoError(t, os.MkdirAll(tmpDir+"/crush", 0o755))
+	require.NoError(t, os.MkdirAll(tmpDir+"/megacli", 0o755))
 
 	// Write Catwalk cache.
 	catwalkProviders := []catwalk.Provider{

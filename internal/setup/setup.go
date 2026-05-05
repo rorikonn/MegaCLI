@@ -17,14 +17,50 @@ import (
 )
 
 const (
-	defaultProviderID   = "athenai"
-	defaultProviderName = "AthenAI"
-	defaultBaseURL      = "https://athenai.mihoyo.com"
-	defaultProviderType = "anthropic"
-	modelsEndpoint      = "https://athenai.mihoyo.com/v1/models"
-	apiKeyField         = "api_key"
-	apiKeyPrefix        = "Bearer "
+	defaultProviderID           = "athenai"
+	defaultProviderName         = "AthenAI"
+	defaultBaseURL              = "https://athenai.mihoyo.com"
+	defaultProviderType         = "anthropic"
+	defaultOpenAICompatProvider = "athenai-openai-compat"
+	defaultOpenAICompatType     = "openai-compat"
+	modelsEndpoint              = "https://athenai.mihoyo.com/v1/models"
+	apiKeyField                 = "api_key"
+	apiKeyPrefix                = "Bearer "
 )
+
+// modelTypeDetect returns the provider type best suited for a model ID.
+// Returns the provider type string ("anthropic" or "openai-compat").
+func modelTypeDetect(modelID string) string {
+	lower := strings.ToLower(modelID)
+	// Anthropic models
+	if strings.Contains(lower, "claude") || strings.Contains(lower, "anthropic") {
+		return "anthropic"
+	}
+	// OpenAI models
+	if strings.Contains(lower, "gpt") || strings.Contains(lower, "o1") ||
+		strings.Contains(lower, "o3") || strings.Contains(lower, "o4") ||
+		strings.Contains(lower, "openai") {
+		return "openai-compat"
+	}
+	// DeepSeek models
+	if strings.Contains(lower, "deepseek") {
+		return "openai-compat"
+	}
+	// Gemini models
+	if strings.Contains(lower, "gemini") {
+		return "openai-compat"
+	}
+	// Default to openai-compat for unknown models
+	return "openai-compat"
+}
+
+// providerIDForType returns a provider key for the given type.
+func providerIDForType(ptype string) string {
+	if ptype == "anthropic" {
+		return defaultProviderID
+	}
+	return defaultOpenAICompatProvider
+}
 
 // templateConfig is the minimal config written on first run.
 // It intentionally omits models — those are populated interactively.
@@ -33,6 +69,12 @@ var templateConfig = map[string]any{
 		defaultProviderID: map[string]any{
 			"name":     defaultProviderName,
 			"type":     defaultProviderType,
+			"base_url": defaultBaseURL,
+			"api_key":  "",
+		},
+		defaultOpenAICompatProvider: map[string]any{
+			"name":     defaultProviderName + " (OpenAI Compat)",
+			"type":     defaultOpenAICompatType,
 			"base_url": defaultBaseURL,
 			"api_key":  "",
 		},
@@ -211,7 +253,7 @@ func FetchModels(apiKey string) ([]ModelInfo, error) {
 	return result.Data, nil
 }
 
-// HasModelsConfigured checks if the provider already has models defined.
+// HasModelsConfigured checks if any provider already has models defined.
 func HasModelsConfigured(cfgPath string) (bool, error) {
 	raw, err := os.ReadFile(cfgPath)
 	if err != nil {
@@ -226,16 +268,21 @@ func HasModelsConfigured(cfgPath string) (bool, error) {
 	if !ok {
 		return false, nil
 	}
-	provider, ok := providers[defaultProviderID].(map[string]any)
-	if !ok {
-		return false, nil
+	for _, pid := range []string{defaultProviderID, defaultOpenAICompatProvider} {
+		provider, ok := providers[pid].(map[string]any)
+		if !ok {
+			continue
+		}
+		models, ok := provider["models"].([]any)
+		if ok && len(models) > 0 {
+			return true, nil
+		}
 	}
-	models, ok := provider["models"].([]any)
-	return ok && len(models) > 0, nil
+	return false, nil
 }
 
-// WriteModelsToConfig writes the selected models into the global config
-// and sets the large/small model selections.
+// WriteModelsToConfig writes the selected models into the global config,
+// splitting them across anthropic and openai-compat providers based on model type.
 func WriteModelsToConfig(cfgPath string, models []ModelInfo) error {
 	raw, err := os.ReadFile(cfgPath)
 	if err != nil {
@@ -251,38 +298,62 @@ func WriteModelsToConfig(cfgPath string, models []ModelInfo) error {
 	if providers == nil {
 		providers = make(map[string]any)
 	}
-	provider, _ := providers[defaultProviderID].(map[string]any)
-	if provider == nil {
-		provider = make(map[string]any)
-	}
 
-	modelDefs := make([]map[string]any, len(models))
-	for i, m := range models {
-		modelDefs[i] = map[string]any{
+	// Group models by provider type.
+	anthropicModels := []map[string]any{}
+	openAICompatModels := []map[string]any{}
+	for _, m := range models {
+		def := map[string]any{
 			"id":                   m.ID,
 			"name":                 m.ID,
 			"context_window":       200000,
 			"default_max_tokens":   16384,
 			"supports_attachments": true,
 		}
-	}
-	provider["models"] = modelDefs
-	providers[defaultProviderID] = provider
-	cfgMap["providers"] = providers
-
-	// Auto-select first model as both large and small
-	if len(models) > 0 {
-		cfgMap["models"] = map[string]any{
-			"large": map[string]any{
-				"provider": defaultProviderID,
-				"model":    models[0].ID,
-			},
-			"small": map[string]any{
-				"provider": defaultProviderID,
-				"model":    models[0].ID,
-			},
+		if modelTypeDetect(m.ID) == "anthropic" {
+			anthropicModels = append(anthropicModels, def)
+		} else {
+			openAICompatModels = append(openAICompatModels, def)
 		}
 	}
+
+	// Write anthropic models under the anthropic provider.
+	if len(anthropicModels) > 0 {
+		provider, _ := providers[defaultProviderID].(map[string]any)
+		if provider == nil {
+			provider = make(map[string]any)
+		}
+		provider["models"] = anthropicModels
+		providers[defaultProviderID] = provider
+	}
+
+	// Write openai-compat models under the openai-compat provider.
+	if len(openAICompatModels) > 0 {
+		provider, _ := providers[defaultOpenAICompatProvider].(map[string]any)
+		if provider == nil {
+			provider = make(map[string]any)
+		}
+		provider["models"] = openAICompatModels
+		providers[defaultOpenAICompatProvider] = provider
+	}
+
+	cfgMap["providers"] = providers
+
+	// Build model selections using the correct provider per model.
+	modelSelections := map[string]any{}
+	if len(models) > 0 {
+		firstModel := models[0]
+		firstProvider := providerIDForType(modelTypeDetect(firstModel.ID))
+		modelSelections["large"] = map[string]any{
+			"provider": firstProvider,
+			"model":    firstModel.ID,
+		}
+		modelSelections["small"] = map[string]any{
+			"provider": firstProvider,
+			"model":    firstModel.ID,
+		}
+	}
+	cfgMap["models"] = modelSelections
 
 	data, err := json.MarshalIndent(cfgMap, "", "  ")
 	if err != nil {
@@ -297,12 +368,17 @@ func extractAPIKey(cfgMap map[string]any) string {
 	if !ok {
 		return ""
 	}
-	provider, ok := providers[defaultProviderID].(map[string]any)
-	if !ok {
-		return ""
+	for _, pid := range []string{defaultProviderID, defaultOpenAICompatProvider} {
+		provider, ok := providers[pid].(map[string]any)
+		if !ok {
+			continue
+		}
+		key, _ := provider[apiKeyField].(string)
+		if key != "" {
+			return key
+		}
 	}
-	key, _ := provider[apiKeyField].(string)
-	return key
+	return ""
 }
 
 func writeAPIKey(cfgPath string, raw []byte, apiKey string) error {
@@ -315,13 +391,17 @@ func writeAPIKey(cfgPath string, raw []byte, apiKey string) error {
 	if providers == nil {
 		providers = make(map[string]any)
 	}
-	provider, _ := providers[defaultProviderID].(map[string]any)
-	if provider == nil {
-		provider = make(map[string]any)
+
+	// Write API key to both providers.
+	for _, pid := range []string{defaultProviderID, defaultOpenAICompatProvider} {
+		provider, _ := providers[pid].(map[string]any)
+		if provider == nil {
+			provider = make(map[string]any)
+		}
+		provider[apiKeyField] = apiKeyPrefix + apiKey
+		providers[pid] = provider
 	}
 
-	provider[apiKeyField] = apiKeyPrefix + apiKey
-	providers[defaultProviderID] = provider
 	cfgMap["providers"] = providers
 
 	data, err := json.MarshalIndent(cfgMap, "", "  ")

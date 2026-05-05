@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # MegaCLI installer for macOS and Linux
-# Usage: curl -sSf https://raw.githubusercontent.com/rorikonn/MegaCLI/main/scripts/install.sh | sh
+# Usage: curl -sSf https://raw.githubusercontent.com/rorikonn/MegaCLI/master/scripts/install.sh | sh
 set -e
 
 REPO="rorikonn/MegaCLI"
