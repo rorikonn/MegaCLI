@@ -26,34 +26,37 @@ true — dev builds skip it entirely.
 
 ## Dev Build (开发包)
 
-Produces a binary with a version like `0.4.0-1a2b3c4` (or
-`0.4.0-1a2b3c4-dirty` if there are uncommitted changes). Auto-update is
-**disabled**.
+Produces a binary with a version like `0.5.2-1a2b3c4` (on master/main) or
+`0.5.2-agent-switch-1a2b3c4` (on feature branches). Appends `-dirty` if
+there are uncommitted changes. Auto-update is **disabled**.
 
-### Preferred: Taskfile
+Version format: `{tag}-[{branch}-]{shortCommit}[-dirty]`
 
-```bash
-task build:dev
-```
+- Branch prefix is included only when NOT on `master` or `main`.
+- `-dirty` suffix is appended when `git status --porcelain` has output.
 
-### Manual Commands
-
-**PowerShell (Windows):**
+### PowerShell (Windows)
 
 ```powershell
 $tag = git describe --tags --abbrev=0
 $commit = git rev-parse --short HEAD
+$branch = git branch --show-current
 $dirty = if (git status --porcelain) { "-dirty" } else { "" }
-go build -o megacli.exe -trimpath -ldflags="-s -w -X github.com/megacli/megacli/internal/version.Version=$($tag.TrimStart('v'))-$commit$dirty -X github.com/megacli/megacli/internal/version.Commit=$(git rev-parse HEAD)" .
+$branchPrefix = if ($branch -eq "master" -or $branch -eq "main") { "" } else { "$branch-" }
+$version = "$($tag.TrimStart('v'))-$branchPrefix$commit$dirty"
+go build -o megacli.exe -trimpath "-ldflags=-s -w -X github.com/megacli/megacli/internal/version.Version=$version -X github.com/megacli/megacli/internal/version.Commit=$(git rev-parse HEAD)" .
 ```
 
-**Bash (Linux/macOS):**
+### Bash (Linux/macOS)
 
 ```bash
 TAG=$(git describe --tags --abbrev=0)
 COMMIT=$(git rev-parse --short HEAD)
+BRANCH=$(git branch --show-current)
 DIRTY=$([ -n "$(git status --porcelain)" ] && echo "-dirty" || echo "")
-go build -o megacli -trimpath -ldflags="-s -w -X github.com/megacli/megacli/internal/version.Version=${TAG#v}-${COMMIT}${DIRTY} -X github.com/megacli/megacli/internal/version.Commit=$(git rev-parse HEAD)" .
+if [ "$BRANCH" = "master" ] || [ "$BRANCH" = "main" ]; then BRANCH_PREFIX=""; else BRANCH_PREFIX="${BRANCH}-"; fi
+VERSION="${TAG#v}-${BRANCH_PREFIX}${COMMIT}${DIRTY}"
+go build -o megacli -trimpath -ldflags="-s -w -X github.com/megacli/megacli/internal/version.Version=${VERSION} -X github.com/megacli/megacli/internal/version.Commit=$(git rev-parse HEAD)" .
 ```
 
 ### Why Auto-Update Is Disabled

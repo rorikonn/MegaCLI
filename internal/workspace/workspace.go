@@ -140,6 +140,11 @@ type Workspace interface {
 	EnableDockerMCP(ctx context.Context) error
 	DisableDockerMCP() error
 
+	// Agent switching
+	AgentSwitch(ctx context.Context, name string) error
+	AgentCurrent() string
+	AgentAvailable() []string
+
 	// MegaCli extensions
 	GetOrchestrator() *orchestrator.Orchestrator
 	GetIPCManager() *ipc.Manager

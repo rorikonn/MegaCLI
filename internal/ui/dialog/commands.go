@@ -9,12 +9,12 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/megacli/megacli/internal/commands"
 	"github.com/megacli/megacli/internal/config"
 	"github.com/megacli/megacli/internal/ui/common"
 	"github.com/megacli/megacli/internal/ui/list"
 	"github.com/megacli/megacli/internal/ui/styles"
-	uv "github.com/charmbracelet/ultraviolet"
 )
 
 // CommandsID is the identifier for the commands dialog.
@@ -422,6 +422,7 @@ func (c *Commands) defaultCommands() []*CommandItem {
 		NewCommandItem(c.com.Styles, "new_session", "New Session", "ctrl+n", ActionNewSession{}),
 		NewCommandItem(c.com.Styles, "switch_session", "Sessions", "ctrl+s", ActionOpenDialog{SessionsID}),
 		NewCommandItem(c.com.Styles, "switch_model", "Switch Model", "ctrl+l", ActionOpenDialog{ModelsID}),
+		NewCommandItem(c.com.Styles, "switch_agent", "Switch Agent", "", ActionOpenDialog{AgentsID}),
 	}
 
 	// Only show compact command if there's an active session

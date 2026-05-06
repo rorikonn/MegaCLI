@@ -21,6 +21,7 @@ const (
 	SpinnerIcon     string = "⋯"
 	LoadingIcon     string = "⟳"
 	ModelIcon       string = "◇"
+	AgentIcon       string = "◈"
 	HypercreditIcon string = "◆"
 
 	ArrowRightIcon string = "→"
@@ -179,6 +180,8 @@ type Styles struct {
 	Sidebar struct {
 		SessionTitle lipgloss.Style // Current session title at top of sidebar
 		WorkingDir   lipgloss.Style // Working directory path (PrettyPath)
+		AgentIcon    lipgloss.Style // Agent indicator icon
+		AgentName    lipgloss.Style // Agent display name
 	}
 
 	// ModelInfo (model name, provider, reasoning, token/cost summary)

@@ -81,6 +81,10 @@ type (
 		Arguments   []commands.Argument
 		Args        map[string]string // Actual argument values
 	}
+	// ActionSwitchAgent is a message to switch the active agent.
+	ActionSwitchAgent struct {
+		AgentID string
+	}
 	// ActionEnableDockerMCP is a message to enable Docker MCP.
 	ActionEnableDockerMCP struct{}
 	// ActionDisableDockerMCP is a message to disable Docker MCP.

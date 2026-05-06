@@ -32,6 +32,7 @@ type PromptDat struct {
 	Model         string
 	Config        config.Config
 	WorkingDir    string
+	HomeDir       string
 	IsGitRepo     bool
 	Platform      string
 	Date          string
@@ -206,6 +207,7 @@ func (p *Prompt) promptData(ctx context.Context, provider, model string, store *
 		Model:         model,
 		Config:        *cfg,
 		WorkingDir:    filepath.ToSlash(workingDir),
+		HomeDir:       filepath.ToSlash(home.Dir()),
 		IsGitRepo:     isGit,
 		Platform:      platform,
 		Date:          p.now().Format("1/2/2006"),

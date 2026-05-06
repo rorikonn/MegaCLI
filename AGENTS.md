@@ -86,22 +86,24 @@ internal/
 
 ## Build/Test/Lint Commands
 
-- **Build**: `task build:dev` (ALWAYS build `megacli.exe` after any code
-  change so the user can immediately test. Produces a dev package with
-  version+commit hash suffix, e.g. `0.4.0-1a2b3c4` or
-  `0.4.0-1a2b3c4-dirty`)
-- **Test**: `task test` or `go test ./...` (run single test:
+- **Build**: ALWAYS build `megacli.exe` after any code change so the user
+  can immediately test. Use the dev build commands from the `build-release`
+  skill (PowerShell on Windows, Bash on Linux/macOS). Produces a dev
+  package with branch+commit hash suffix, e.g. `0.5.2-1a2b3c4` (on
+  master) or `0.5.2-feature-1a2b3c4-dirty` (on feature branch with
+  uncommitted changes).
+- **Build (alt)**: `go run .`
+- **Test**: `go test ./...` (run single test:
   `go test ./internal/llm/prompt -run TestGetContextFromPaths`)
 - **Update Golden Files**: `go test ./... -update` (regenerates `.golden`
   files when test output changes)
   - Update specific package:
     `go test ./internal/tui/components/core -update` (in this case,
     we're updating "core")
-- **Lint**: `task lint:fix`
-- **Format**: `task fmt` (`gofumpt -w .`)
-- **Modernize**: `task modernize` (runs `modernize` which makes code
-  simplifications)
-- **Dev**: `task dev` (runs with profiling enabled)
+- **Lint**: `golangci-lint run --path-mode=abs --config=".golangci.yml"
+  --timeout=5m --fix`
+- **Format**: `gofumpt -w .` (if available, otherwise `gofmt -w .`)
+- **Dev**: `go run .` (with `CRUSH_PROFILE=true` for profiling)
 
 ## Code Style Guidelines
 

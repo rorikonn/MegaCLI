@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 
 	"charm.land/catwalk/pkg/catwalk"
@@ -63,8 +64,6 @@ var (
 )
 
 type Coordinator interface {
-	// INFO: (kujtim) this is not used yet we will use this when we have multiple agents
-	// SetMainAgent(string)
 	Run(ctx context.Context, sessionID, prompt string, attachments ...message.Attachment) (*fantasy.AgentResult, error)
 	Cancel(sessionID string)
 	CancelAll()
@@ -80,6 +79,16 @@ type Coordinator interface {
 	// SetExtraTools injects additional tools (e.g. MegaTool wrappers,
 	// delegate tools) that will be included in every agent build.
 	SetExtraTools(tools []fantasy.AgentTool)
+
+	// SwitchAgent hot-swaps the current agent's system prompt and tools.
+	// Only primary agents can be switched to.
+	SwitchAgent(ctx context.Context, name string) error
+
+	// CurrentAgent returns the ID of the active agent.
+	CurrentAgent() string
+
+	// AvailableAgents returns the IDs of all non-disabled primary agents.
+	AvailableAgents() []string
 }
 
 type coordinator struct {
@@ -92,8 +101,16 @@ type coordinator struct {
 	lspManager  *lsp.Manager
 	notify      pubsub.Publisher[notify.Notification]
 
-	currentAgent SessionAgent
-	agents       map[string]SessionAgent
+	currentAgent     SessionAgent
+	currentAgentName string
+	agents           map[string]SessionAgent
+
+	// agentDefs caches the agent configurations from config for runtime
+	// lookups (e.g. SwitchAgent, AvailableAgents).
+	agentDefs map[string]config.Agent
+
+	// subAgents holds pre-built SessionAgent instances for all subagents.
+	subAgents map[string]SessionAgent
 
 	// Skills discovery results (session-start snapshot).
 	allSkills    []*skills.Skill // Pre-filter: all discovered after dedup.
@@ -122,32 +139,33 @@ func NewCoordinator(
 	skillTracker := skills.NewTracker(activeSkills)
 
 	c := &coordinator{
-		cfg:          cfg,
-		sessions:     sessions,
-		messages:     messages,
-		permissions:  permissions,
-		history:      history,
-		filetracker:  filetracker,
-		lspManager:   lspManager,
-		notify:       notify,
-		agents:       make(map[string]SessionAgent),
-		allSkills:    allSkills,
-		activeSkills: activeSkills,
-		skillTracker: skillTracker,
+		cfg:              cfg,
+		sessions:         sessions,
+		messages:         messages,
+		permissions:      permissions,
+		history:          history,
+		filetracker:      filetracker,
+		lspManager:       lspManager,
+		notify:           notify,
+		agents:           make(map[string]SessionAgent),
+		agentDefs:        cfg.Config().Agents,
+		currentAgentName: config.AgentCoder,
+		allSkills:        allSkills,
+		activeSkills:     activeSkills,
+		skillTracker:     skillTracker,
 	}
 
-	agentCfg, ok := cfg.Config().Agents[config.AgentCoder]
+	agentCfg, ok := c.agentDefs[config.AgentCoder]
 	if !ok {
 		return nil, errCoderAgentNotConfigured
 	}
 
-	// TODO: make this dynamic when we support multiple agents
-	prompt, err := coderPrompt(prompt.WithWorkingDir(c.cfg.WorkingDir()))
+	p, err := promptForAgent(agentCfg, prompt.WithWorkingDir(c.cfg.WorkingDir()))
 	if err != nil {
 		return nil, err
 	}
 
-	agent, err := c.buildAgent(ctx, prompt, agentCfg, false)
+	agent, err := c.buildAgent(ctx, p, agentCfg, false)
 	if err != nil {
 		return nil, err
 	}
@@ -470,6 +488,10 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubA
 			return nil, err
 		}
 		allTools = append(allTools, agentTool)
+	}
+
+	if slices.Contains(agent.AllowedTools, SwitchAgentToolName) {
+		allTools = append(allTools, c.switchAgentTool())
 	}
 
 	if slices.Contains(agent.AllowedTools, tools.AgenticFetchToolName) {
@@ -938,16 +960,15 @@ func (c *coordinator) Model() Model {
 }
 
 func (c *coordinator) UpdateModels(ctx context.Context) error {
-	// build the models again so we make sure we get the latest config
 	large, small, err := c.buildAgentModels(ctx, false)
 	if err != nil {
 		return err
 	}
 	c.currentAgent.SetModels(large, small)
 
-	agentCfg, ok := c.cfg.Config().Agents[config.AgentCoder]
+	agentCfg, ok := c.agentDefs[c.currentAgentName]
 	if !ok {
-		return errCoderAgentNotConfigured
+		return fmt.Errorf("agent %q not found in config", c.currentAgentName)
 	}
 
 	tools, err := c.buildTools(ctx, agentCfg, false)
@@ -960,6 +981,71 @@ func (c *coordinator) UpdateModels(ctx context.Context) error {
 
 func (c *coordinator) SetExtraTools(tools []fantasy.AgentTool) {
 	c.extraTools = tools
+}
+
+// SwitchAgent hot-swaps the current agent's system prompt and tools
+// to those defined by the named agent. Only primary agents are allowed.
+func (c *coordinator) SwitchAgent(ctx context.Context, name string) error {
+	if name == c.currentAgentName {
+		return nil
+	}
+
+	agentCfg, ok := c.agentDefs[name]
+	if !ok {
+		return fmt.Errorf("agent %q not found", name)
+	}
+	if agentCfg.EffectiveRole() != config.AgentRolePrimary {
+		return fmt.Errorf("agent %q is a subagent and cannot be switched to directly", name)
+	}
+	if agentCfg.Disabled {
+		return fmt.Errorf("agent %q is disabled", name)
+	}
+
+	p, err := promptForAgent(agentCfg, prompt.WithWorkingDir(c.cfg.WorkingDir()))
+	if err != nil {
+		return fmt.Errorf("loading prompt for agent %q: %w", name, err)
+	}
+
+	cfg := c.cfg.Config()
+	model := c.currentAgent.Model()
+	providerCfg, ok := cfg.Providers.Get(model.ModelCfg.Provider)
+	if !ok {
+		return errModelProviderNotConfigured
+	}
+
+	built, err := p.Build(ctx, providerCfg.ID, model.CatwalkCfg.Name, c.cfg)
+	if err != nil {
+		return fmt.Errorf("building prompt for agent %q: %w", name, err)
+	}
+	c.currentAgent.SetSystemPrompt(built)
+
+	tools, err := c.buildTools(ctx, agentCfg, false)
+	if err != nil {
+		return fmt.Errorf("building tools for agent %q: %w", name, err)
+	}
+	c.currentAgent.SetTools(tools)
+
+	c.currentAgentName = name
+	slog.Info("Switched agent", "agent", name)
+	return nil
+}
+
+// CurrentAgent returns the ID of the active agent.
+func (c *coordinator) CurrentAgent() string {
+	return c.currentAgentName
+}
+
+// AvailableAgents returns IDs of all non-disabled primary agents.
+func (c *coordinator) AvailableAgents() []string {
+	var result []string
+	for id, a := range c.agentDefs {
+		if a.Disabled || a.EffectiveRole() != config.AgentRolePrimary {
+			continue
+		}
+		result = append(result, id)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func (c *coordinator) QueuedPrompts(sessionID string) int {

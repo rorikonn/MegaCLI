@@ -14,11 +14,11 @@ import (
 	"time"
 
 	"charm.land/catwalk/pkg/catwalk"
+	"github.com/invopop/jsonschema"
 	"github.com/megacli/megacli/internal/csync"
 	"github.com/megacli/megacli/internal/env"
 	"github.com/megacli/megacli/internal/oauth"
 	"github.com/megacli/megacli/internal/oauth/copilot"
-	"github.com/invopop/jsonschema"
 )
 
 const (
@@ -61,6 +61,17 @@ const (
 const (
 	AgentCoder string = "coder"
 	AgentTask  string = "task"
+	AgentPlan  string = "plan"
+)
+
+// AgentRole distinguishes primary agents from subagents.
+type AgentRole string
+
+const (
+	// AgentRolePrimary agents appear in the Switch Agent menu.
+	AgentRolePrimary AgentRole = "primary"
+	// AgentRoleSubagent agents are only invoked internally by other agents.
+	AgentRoleSubagent AgentRole = "subagent"
 )
 
 type SelectedModel struct {
@@ -327,23 +338,42 @@ type Agent struct {
 	ID          string `json:"id,omitempty"`
 	Name        string `json:"name,omitempty"`
 	Description string `json:"description,omitempty"`
-	// This is the id of the system prompt used by the agent
-	Disabled bool `json:"disabled,omitempty"`
+	Disabled    bool   `json:"disabled,omitempty"`
+
+	// Role controls visibility: "primary" agents appear in the Switch
+	// Agent menu; "subagent" agents are only invoked internally.
+	// Defaults to "primary" when empty.
+	Role AgentRole `json:"role,omitempty" jsonschema:"description=Agent role: primary (user-switchable) or subagent (internal only),enum=primary,enum=subagent,default=primary"`
 
 	Model SelectedModelType `json:"model" jsonschema:"required,description=The model type to use for this agent,enum=large,enum=small,default=large"`
 
-	// The available tools for the agent
-	//  if this is nil, all tools are available
+	// The available tools for the agent.
+	// Nil means all tools are available.
 	AllowedTools []string `json:"allowed_tools,omitempty"`
 
-	// this tells us which MCPs are available for this agent
-	//  if this is empty all mcps are available
-	//  the string array is the list of tools from the AllowedMCP the agent has available
-	//  if the string array is nil, all tools from the AllowedMCP are available
+	// AllowedMCP controls which MCP servers and tools are available.
+	// Empty means all MCPs are available. The string slice lists the
+	// allowed tool names; nil means all tools from that MCP.
 	AllowedMCP map[string][]string `json:"allowed_mcp,omitempty"`
 
-	// Overrides the context paths for this agent
+	// Overrides the context paths for this agent.
 	ContextPaths []string `json:"context_paths,omitempty"`
+
+	// Prompt is the name of a built-in template (e.g. "coder", "task").
+	// Looked up as templates/{name}.md.tpl in the embedded FS.
+	Prompt string `json:"prompt,omitempty" jsonschema:"description=Built-in prompt template name (e.g. coder or task)"`
+
+	// PromptFile is a path to a custom .md.tpl template on disk.
+	// Takes precedence over Prompt when set.
+	PromptFile string `json:"prompt_file,omitempty" jsonschema:"description=Path to a custom prompt template file on disk"`
+}
+
+// EffectiveRole returns the agent's role, defaulting to primary.
+func (a Agent) EffectiveRole() AgentRole {
+	if a.Role == "" {
+		return AgentRolePrimary
+	}
+	return a.Role
 }
 
 type Tools struct {
@@ -421,6 +451,12 @@ type Config struct {
 
 	IPC *IPCConfig `json:"ipc,omitempty" jsonschema:"description=Inter-process communication settings"`
 
+	// AgentOverrides allows crush.json to define or override agents
+	// directly (keyed by agent ID). This is the user-facing way to
+	// configure agents without touching the orchestrator block.
+	AgentOverrides map[string]Agent `json:"agents,omitempty" jsonschema:"description=Agent definitions and overrides (keyed by agent ID)"`
+
+	// Agents is the runtime agent registry, populated by SetupAgents().
 	Agents map[string]Agent `json:"-"`
 }
 
@@ -533,6 +569,7 @@ func allToolNames() []string {
 		"list_mcp_resources",
 		"read_mcp_resource",
 		"show_file",
+		"switch_agent",
 		"delegate",
 		"remote_delegate",
 	}
@@ -572,7 +609,9 @@ func (c *Config) SetupAgents() {
 			ID:           AgentCoder,
 			Name:         "Coder",
 			Description:  "An agent that helps with executing coding tasks.",
+			Role:         AgentRolePrimary,
 			Model:        SelectedModelTypeLarge,
+			Prompt:       "coder",
 			ContextPaths: c.Options.ContextPaths,
 			AllowedTools: allowedTools,
 		},
@@ -581,14 +620,150 @@ func (c *Config) SetupAgents() {
 			ID:           AgentTask,
 			Name:         "Task",
 			Description:  "An agent that helps with searching for context and finding implementation details.",
+			Role:         AgentRoleSubagent,
 			Model:        SelectedModelTypeLarge,
+			Prompt:       "task",
 			ContextPaths: c.Options.ContextPaths,
 			AllowedTools: resolveReadOnlyTools(allowedTools),
-			// NO MCPs or LSPs by default
-			AllowedMCP: map[string][]string{},
+			AllowedMCP:   map[string][]string{},
+		},
+
+		AgentPlan: {
+			ID:           AgentPlan,
+			Name:         "Plan",
+			Description:  "A planning agent that first creates implementation plans, then executes after user confirmation.",
+			Role:         AgentRolePrimary,
+			Model:        SelectedModelTypeLarge,
+			Prompt:       "plan",
+			ContextPaths: c.Options.ContextPaths,
+			AllowedTools: allowedTools,
 		},
 	}
+
+	// Merge user-defined agents from crush.json and apply overrides to
+	// built-in agents.
+	c.mergeUserAgents(agents, allowedTools)
+
 	c.Agents = agents
+}
+
+// mergeUserAgents applies user-defined agent configurations from both
+// the "agents" top-level block and the legacy "orchestrator.agents"
+// block in crush.json. The top-level "agents" block takes precedence.
+func (c *Config) mergeUserAgents(agents map[string]Agent, allowedTools []string) {
+	// Legacy: orchestrator.agents (array-based).
+	if c.Orchestrator != nil {
+		for _, oa := range c.Orchestrator.Agents {
+			if oa.Name == "" {
+				continue
+			}
+			applyOrchestratorOverride(agents, oa, c.Options.ContextPaths, allowedTools)
+		}
+	}
+
+	// Primary: top-level agents block (map-based, takes precedence).
+	for id, override := range c.AgentOverrides {
+		existing, ok := agents[id]
+		if !ok {
+			a := Agent{
+				ID:           id,
+				Name:         override.Name,
+				Description:  override.Description,
+				Role:         override.Role,
+				Model:        SelectedModelTypeLarge,
+				Prompt:       override.Prompt,
+				PromptFile:   override.PromptFile,
+				ContextPaths: c.Options.ContextPaths,
+				AllowedTools: allowedTools,
+			}
+			if a.Name == "" {
+				a.Name = id
+			}
+			if override.Model != "" {
+				a.Model = override.Model
+			}
+			if len(override.AllowedTools) > 0 {
+				a.AllowedTools = override.AllowedTools
+			}
+			if len(override.AllowedMCP) > 0 {
+				a.AllowedMCP = override.AllowedMCP
+			}
+			if len(override.ContextPaths) > 0 {
+				a.ContextPaths = override.ContextPaths
+			}
+			agents[id] = a
+			continue
+		}
+		if override.Name != "" {
+			existing.Name = override.Name
+		}
+		if override.Description != "" {
+			existing.Description = override.Description
+		}
+		if override.Role != "" {
+			existing.Role = override.Role
+		}
+		if override.Model != "" {
+			existing.Model = override.Model
+		}
+		if len(override.AllowedTools) > 0 {
+			existing.AllowedTools = override.AllowedTools
+		}
+		if len(override.AllowedMCP) > 0 {
+			existing.AllowedMCP = override.AllowedMCP
+		}
+		if len(override.ContextPaths) > 0 {
+			existing.ContextPaths = override.ContextPaths
+		}
+		if override.Prompt != "" {
+			existing.Prompt = override.Prompt
+		}
+		if override.PromptFile != "" {
+			existing.PromptFile = override.PromptFile
+		}
+		if override.Disabled {
+			existing.Disabled = true
+		}
+		agents[id] = existing
+	}
+}
+
+func applyOrchestratorOverride(agents map[string]Agent, oa OrchestratorAgentConfig, ctxPaths []string, allowedTools []string) {
+	existing, ok := agents[oa.Name]
+	if !ok {
+		a := Agent{
+			ID:           oa.Name,
+			Name:         oa.Name,
+			Role:         AgentRole(oa.Role),
+			Model:        SelectedModelTypeLarge,
+			ContextPaths: ctxPaths,
+			AllowedTools: allowedTools,
+		}
+		if oa.Model != "" {
+			a.Model = SelectedModelType(oa.Model)
+		}
+		if len(oa.Tools) > 0 {
+			a.AllowedTools = oa.Tools
+		}
+		if oa.SystemPromptTemplate != "" {
+			a.PromptFile = oa.SystemPromptTemplate
+		}
+		agents[oa.Name] = a
+		return
+	}
+	if oa.Model != "" {
+		existing.Model = SelectedModelType(oa.Model)
+	}
+	if oa.Role != "" {
+		existing.Role = AgentRole(oa.Role)
+	}
+	if len(oa.Tools) > 0 {
+		existing.AllowedTools = oa.Tools
+	}
+	if oa.SystemPromptTemplate != "" {
+		existing.PromptFile = oa.SystemPromptTemplate
+	}
+	agents[oa.Name] = existing
 }
 
 func (c *ProviderConfig) TestConnection(resolver VariableResolver) error {

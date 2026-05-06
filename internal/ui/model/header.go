@@ -46,11 +46,11 @@ func newHeader(com *common.Common) *header {
 func (h *header) refresh() {
 	t := h.com.Styles
 	isHyper := h.com.IsHyper()
-	charm := "Charm™"
+	charm := "Mihoyo™"
 	if !isHyper {
 		charm = " " + charm
 	}
-	name := "megacli"
+	name := "MEGACLI"
 	if isHyper {
 		name = "HYPERCRUSH"
 	}
@@ -138,6 +138,15 @@ func renderHeaderDetails(
 	t := com.Styles
 
 	var parts []string
+
+	currentAgent := com.Workspace.AgentCurrent()
+	if currentAgent != "" {
+		agentName := currentAgent
+		if a, ok := com.Config().Agents[currentAgent]; ok && a.Name != "" {
+			agentName = a.Name
+		}
+		parts = append(parts, t.Sidebar.AgentIcon.Render(styles.AgentIcon)+" "+t.Sidebar.AgentName.Render(agentName))
+	}
 
 	if lspErrorCount > 0 {
 		parts = append(parts, t.LSP.ErrorDiagnostic.Render(fmt.Sprintf("%s%d", styles.LSPErrorIcon, lspErrorCount)))

@@ -8,9 +8,29 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/megacli/megacli/internal/ui/common"
 	"github.com/megacli/megacli/internal/ui/logo"
+	"github.com/megacli/megacli/internal/ui/styles"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/ultraviolet/layout"
 )
+
+// agentInfo renders the current agent indicator for the sidebar.
+func (m *UI) agentInfo(width int) string {
+	agentID := m.com.Workspace.AgentCurrent()
+	if agentID == "" {
+		return ""
+	}
+	agentCfg, ok := m.com.Config().Agents[agentID]
+	displayName := agentID
+	if ok && agentCfg.Name != "" {
+		displayName = agentCfg.Name
+	}
+	t := m.com.Styles
+	icon := t.Sidebar.AgentIcon.Render(styles.AgentIcon)
+	name := t.Sidebar.AgentName.Render(displayName)
+	return lipgloss.NewStyle().Width(width).Render(
+		fmt.Sprintf("%s %s", icon, name),
+	)
+}
 
 // modelInfo renders the current model information including reasoning
 // settings and context usage/cost for the sidebar.
@@ -156,9 +176,14 @@ func (m *UI) drawSidebar(scr uv.Screen, area uv.Rectangle) {
 		"",
 		cwd,
 		"",
+	}
+	if agentLine := m.agentInfo(width); agentLine != "" {
+		blocks = append(blocks, agentLine)
+	}
+	blocks = append(blocks,
 		m.modelInfo(width),
 		"",
-	}
+	)
 
 	sidebarHeader := lipgloss.JoinVertical(
 		lipgloss.Left,

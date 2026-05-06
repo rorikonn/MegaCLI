@@ -754,6 +754,8 @@ func quickStyle(o quickStyleOpts) Styles {
 	// Sidebar
 	s.Sidebar.SessionTitle = lipgloss.NewStyle().Foreground(o.fgMoreSubtle)
 	s.Sidebar.WorkingDir = lipgloss.NewStyle().Foreground(o.fgMoreSubtle)
+	s.Sidebar.AgentIcon = lipgloss.NewStyle().Foreground(o.fgMostSubtle)
+	s.Sidebar.AgentName = lipgloss.NewStyle().Foreground(o.fgBase)
 
 	// ModelInfo
 	s.ModelInfo.Icon = lipgloss.NewStyle().Foreground(o.fgMostSubtle)

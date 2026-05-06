@@ -1371,6 +1371,17 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 			cmds = append(cmds, cmd)
 		}
 
+	// Agent switch message.
+	case dialog.ActionSwitchAgent:
+		m.dialog.CloseDialog(dialog.AgentsID)
+		m.dialog.CloseDialog(dialog.CommandsID)
+		cmds = append(cmds, func() tea.Msg {
+			if err := m.com.Workspace.AgentSwitch(context.Background(), msg.AgentID); err != nil {
+				return util.ReportError(err)()
+			}
+			return util.NewInfoMsg("Switched to agent: " + msg.AgentID)
+		})
+
 	// Command dialog messages.
 	case dialog.ActionToggleYoloMode:
 		yolo := !m.com.Workspace.PermissionSkipRequests()
@@ -3281,6 +3292,10 @@ func (m *UI) openDialog(id string) tea.Cmd {
 		if cmd := m.openFilesDialog(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+	case dialog.AgentsID:
+		if cmd := m.openAgentsDialog(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	case dialog.QuitID:
 		if cmd := m.openQuitDialog(); cmd != nil {
 			cmds = append(cmds, cmd)
@@ -3302,6 +3317,26 @@ func (m *UI) openQuitDialog() tea.Cmd {
 
 	quitDialog := dialog.NewQuit(m.com)
 	m.dialog.OpenDialog(quitDialog)
+	return nil
+}
+
+// openAgentsDialog opens the agent selection dialog.
+func (m *UI) openAgentsDialog() tea.Cmd {
+	if m.dialog.ContainsDialog(dialog.AgentsID) {
+		m.dialog.BringToFront(dialog.AgentsID)
+		return nil
+	}
+
+	agentsDialog, err := dialog.NewAgents(
+		m.com,
+		m.com.Workspace.AgentCurrent(),
+		m.com.Workspace.AgentAvailable(),
+	)
+	if err != nil {
+		return util.ReportError(err)
+	}
+
+	m.dialog.OpenDialog(agentsDialog)
 	return nil
 }
 

@@ -155,6 +155,27 @@ func (w *AppWorkspace) AgentSummarize(ctx context.Context, sessionID string) err
 	return w.app.AgentCoordinator.Summarize(ctx, sessionID)
 }
 
+func (w *AppWorkspace) AgentSwitch(ctx context.Context, name string) error {
+	if w.app.AgentCoordinator == nil {
+		return errors.New("agent coordinator not initialized")
+	}
+	return w.app.AgentCoordinator.SwitchAgent(ctx, name)
+}
+
+func (w *AppWorkspace) AgentCurrent() string {
+	if w.app.AgentCoordinator == nil {
+		return ""
+	}
+	return w.app.AgentCoordinator.CurrentAgent()
+}
+
+func (w *AppWorkspace) AgentAvailable() []string {
+	if w.app.AgentCoordinator == nil {
+		return nil
+	}
+	return w.app.AgentCoordinator.AvailableAgents()
+}
+
 func (w *AppWorkspace) UpdateAgentModel(ctx context.Context) error {
 	return w.app.UpdateAgentModel(ctx)
 }

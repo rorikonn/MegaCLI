@@ -59,6 +59,7 @@ func init() {
 	rootCmd.Flags().BoolP("continue", "C", false, "Continue the most recent session")
 	rootCmd.Flags().Bool("startup", false, "Force re-run the startup setup (API key + model selection)")
 	rootCmd.Flags().Bool("update", false, "Update MegaCLI to the latest version")
+	rootCmd.Flags().StringP("agent", "a", "", "Start with a specific agent (e.g. coder, plan, debug)")
 	rootCmd.MarkFlagsMutuallyExclusive("session", "continue")
 
 	rootCmd.AddCommand(
@@ -163,6 +164,14 @@ crush --continue
 				return err
 			}
 			sessionID = sess.ID
+		}
+
+		// Apply --agent flag if specified.
+		agentFlag, _ := cmd.Flags().GetString("agent")
+		if agentFlag != "" {
+			if err := ws.AgentSwitch(cmd.Context(), agentFlag); err != nil {
+				return fmt.Errorf("failed to switch to agent %q: %w", agentFlag, err)
+			}
 		}
 
 		event.AppInitialized()

@@ -30,7 +30,11 @@ func (m *UI) landingView() string {
 		cwd,
 	}
 
-	parts = append(parts, "", m.modelInfo(width))
+	parts = append(parts, "")
+	if agentLine := m.agentInfo(width); agentLine != "" {
+		parts = append(parts, agentLine)
+	}
+	parts = append(parts, m.modelInfo(width))
 	infoSection := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
 	var remainingHeightArea image.Rectangle

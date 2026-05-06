@@ -40,7 +40,7 @@ type Opts struct {
 // The compact argument determines whether it renders compact for the sidebar
 // or wider for the main pane.
 func Render(base lipgloss.Style, version string, compact bool, o Opts) string {
-	charm := "Charm™"
+	charm := "Mihoyo™"
 	if !o.Hyper {
 		charm = " " + charm
 	}
@@ -61,15 +61,28 @@ func Render(base lipgloss.Style, version string, compact bool, o Opts) string {
 			LetterR,
 		}
 	}
-	crushLetterforms := []letterform{
-		LetterC,
-		LetterR,
-		LetterU,
-		LetterSAlt,
-		LetterH,
-	}
-	if o.Hyper && !compact {
-		crushLetterforms = append(hyperLetterforms, crushLetterforms...)
+	var crushLetterforms []letterform
+	if o.Hyper {
+		crushLetterforms = []letterform{
+			LetterC,
+			LetterR,
+			LetterU,
+			LetterSAlt,
+			LetterH,
+		}
+		if !compact {
+			crushLetterforms = append(hyperLetterforms, crushLetterforms...)
+		}
+	} else {
+		crushLetterforms = []letterform{
+			LetterM,
+			LetterE,
+			LetterG,
+			LetterA,
+			LetterC,
+			LetterL,
+			LetterI,
+		}
 	}
 
 	stretchIndex := -1 // -1 means no stretching.
@@ -149,11 +162,11 @@ func Render(base lipgloss.Style, version string, compact bool, o Opts) string {
 // SmallRender renders a smaller version of the Crush logo, suitable for
 // smaller windows or sidebar usage.
 func SmallRender(t *styles.Styles, width int, o Opts) string {
-	name := "megacli"
+	name := "MEGACLI"
 	if o.Hyper {
 		name = "HYPERCRUSH"
 	}
-	charm := "Charm™"
+	charm := "Mihoyo™"
 	if !o.Hyper {
 		charm = " " + charm
 	}

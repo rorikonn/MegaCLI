@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/powernap/pkg/lsp/protocol"
 	"github.com/megacli/megacli/internal/agent/notify"
 	"github.com/megacli/megacli/internal/agent/tools/mcp"
 	"github.com/megacli/megacli/internal/client"
@@ -24,7 +26,6 @@ import (
 	"github.com/megacli/megacli/internal/proto"
 	"github.com/megacli/megacli/internal/pubsub"
 	"github.com/megacli/megacli/internal/session"
-	"github.com/charmbracelet/x/powernap/pkg/lsp/protocol"
 )
 
 // ClientWorkspace implements the Workspace interface by delegating all
@@ -226,6 +227,18 @@ func (w *ClientWorkspace) AgentClearQueue(sessionID string) {
 
 func (w *ClientWorkspace) AgentSummarize(ctx context.Context, sessionID string) error {
 	return w.client.AgentSummarizeSession(ctx, w.workspaceID(), sessionID)
+}
+
+func (w *ClientWorkspace) AgentSwitch(_ context.Context, _ string) error {
+	return errors.New("agent switching not supported in client mode")
+}
+
+func (w *ClientWorkspace) AgentCurrent() string {
+	return "coder"
+}
+
+func (w *ClientWorkspace) AgentAvailable() []string {
+	return []string{"coder"}
 }
 
 func (w *ClientWorkspace) UpdateAgentModel(ctx context.Context) error {

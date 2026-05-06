@@ -450,6 +450,19 @@ func TestDiscoverBuiltin(t *testing.T) {
 		}
 	}
 	require.True(t, foundHooks, "crush-hooks builtin skill not found")
+
+	var foundCreateAgent bool
+	for _, s := range discovered {
+		if s.Name == "create-agent" {
+			foundCreateAgent = true
+			require.Equal(t, "crush://skills/create-agent/SKILL.md", s.SkillFilePath)
+			require.Equal(t, "crush://skills/create-agent", s.Path)
+			require.NotEmpty(t, s.Description)
+			require.NotEmpty(t, s.Instructions)
+			require.True(t, s.Builtin)
+		}
+	}
+	require.True(t, foundCreateAgent, "create-agent builtin skill not found")
 }
 
 func TestDeduplicate(t *testing.T) {
