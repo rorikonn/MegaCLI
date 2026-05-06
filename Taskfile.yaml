@@ -45,7 +45,7 @@ tasks:
     vars:
       LDFLAGS: '{{if .VERSION}}-ldflags="-X github.com/megacli/megacli/internal/version.Version={{.VERSION}}"{{end}}'
     cmds:
-      - "go build -v {{if .RACE}}-race{{end}} {{.LDFLAGS}} ."
+      - "go build -v -o megacli{{exeExt}} {{if .RACE}}-race{{end}} {{.LDFLAGS}} ."
     sources:
       - ./**/*.go
       - go.mod
@@ -53,7 +53,7 @@ tasks:
       - internal/agent/**/*.md.tpl
       - internal/agent/hyper/provider.json
     generates:
-      - crush{{exeExt}}
+      - megacli{{exeExt}}
 
   build:dev:
     desc: Build dev package with version+commit suffix (and dirty flag)
@@ -79,7 +79,7 @@ tasks:
     desc: Run build
     cmds:
       - task: build
-      - "./crush{{exeExt}} {{.CLI_ARGS}} {{if .RACE}}2>race.log{{end}}"
+      - "./megacli{{exeExt}} {{.CLI_ARGS}} {{if .RACE}}2>race.log{{end}}"
 
   run:catwalk:
     desc: Run build with local Catwalk
@@ -87,7 +87,7 @@ tasks:
       CATWALK_URL: http://localhost:8080
     cmds:
       - task: build
-      - ./crush{{exeExt}} {{.CLI_ARGS}}
+      - ./megacli{{exeExt}} {{.CLI_ARGS}}
 
   run:onboarding:
     desc: Run build with custom config to test onboarding
@@ -97,7 +97,7 @@ tasks:
     cmds:
       - task: build
       - rm -rf tmp/onboarding
-      - ./crush{{exeExt}} {{.CLI_ARGS}}
+      - ./megacli{{exeExt}} {{.CLI_ARGS}}
 
   test:
     desc: Run tests
