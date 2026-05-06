@@ -54,6 +54,12 @@ type UpdateAvailableMsg struct {
 	IsDevelopment  bool
 }
 
+// UpdateDownloadingMsg is sent when an update download has started.
+type UpdateDownloadingMsg struct {
+	CurrentVersion string
+	LatestVersion  string
+}
+
 // UpdateAppliedMsg is sent when an update has been applied and a restart
 // is needed to use the new version.
 type UpdateAppliedMsg struct {
@@ -712,6 +718,11 @@ func (app *App) checkForUpdates(ctx context.Context) {
 		"current", info.Current,
 		"latest", info.Latest,
 	)
+
+	app.events.Publish(pubsub.UpdatedEvent, UpdateDownloadingMsg{
+		CurrentVersion: info.Current,
+		LatestVersion:  info.Latest,
+	})
 
 	updCtx, updCancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer updCancel()

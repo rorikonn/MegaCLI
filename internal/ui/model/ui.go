@@ -271,6 +271,11 @@ type UI struct {
 	todoSpinner    spinner.Model
 	todoIsSpinning bool
 
+	// Update spinner shown while downloading an update.
+	updateSpinner    spinner.Model
+	isUpdating       bool
+	updateStatusText string
+
 	// mouse highlighting related state
 	lastClickTime time.Time
 
@@ -326,6 +331,11 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 		spinner.WithStyle(com.Styles.Pills.TodoSpinner),
 	)
 
+	updateSpinner := spinner.New(
+		spinner.WithSpinner(spinner.Dot),
+		spinner.WithStyle(com.Styles.Status.UpdateMessage),
+	)
+
 	// Attachments component
 	attachments := attachments.New(
 		attachments.NewRenderer(
@@ -353,6 +363,7 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 		completions:         comp,
 		attachments:         attachments,
 		todoSpinner:         todoSpinner,
+		updateSpinner:       updateSpinner,
 		lspStates:           make(map[string]app.LSPClientInfo),
 		mcpStates:           make(map[string]mcp.ClientInfo),
 		notifyBackend:       notification.NoopBackend{},
@@ -874,6 +885,20 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 		}
+		if m.isUpdating {
+			var cmd tea.Cmd
+			m.updateSpinner, cmd = m.updateSpinner.Update(msg)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+				cur := m.status.msg
+				if cur.Type == util.InfoTypeUpdate && cur.TTL == 0 {
+					m.status.SetInfoMsg(util.InfoMsg{
+						Type: util.InfoTypeUpdate,
+						Msg:  m.updateSpinner.View() + " " + m.updateStatusText,
+					})
+				}
+			}
+		}
 
 	case tea.KeyPressMsg:
 		if cmd := m.handleKeyPressMsg(msg); cmd != nil {
@@ -908,7 +933,16 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			ttl = DefaultStatusTTL
 		}
 		cmds = append(cmds, clearInfoMsgCmd(ttl))
+	case app.UpdateDownloadingMsg:
+		m.isUpdating = true
+		m.updateStatusText = fmt.Sprintf("Updating v%s → v%s…", msg.CurrentVersion, msg.LatestVersion)
+		m.status.SetInfoMsg(util.InfoMsg{
+			Type: util.InfoTypeUpdate,
+			Msg:  m.updateSpinner.View() + " " + m.updateStatusText,
+		})
+		cmds = append(cmds, m.updateSpinner.Tick)
 	case app.UpdateAppliedMsg:
+		m.isUpdating = false
 		text := fmt.Sprintf("MegaCLI updated to v%s. Restarting is recommended.", msg.Version)
 		ttl := 30 * time.Second
 		m.status.SetInfoMsg(util.InfoMsg{
@@ -918,9 +952,10 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 		cmds = append(cmds, clearInfoMsgCmd(ttl))
 	case app.UpdateAvailableMsg:
-		text := fmt.Sprintf("Crush update available: v%s → v%s.", msg.CurrentVersion, msg.LatestVersion)
+		m.isUpdating = false
+		text := fmt.Sprintf("MegaCLI update available: v%s → v%s.", msg.CurrentVersion, msg.LatestVersion)
 		if msg.IsDevelopment {
-			text = fmt.Sprintf("This is a development version of Crush. The latest version is v%s.", msg.LatestVersion)
+			text = fmt.Sprintf("This is a development version of MegaCLI. The latest version is v%s.", msg.LatestVersion)
 		}
 		ttl := 10 * time.Second
 		m.status.SetInfoMsg(util.InfoMsg{
@@ -930,7 +965,9 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 		cmds = append(cmds, clearInfoMsgCmd(ttl))
 	case util.ClearStatusMsg:
-		m.status.ClearInfoMsg()
+		if !m.isUpdating {
+			m.status.ClearInfoMsg()
+		}
 	case completions.CompletionItemsLoadedMsg:
 		if m.completionsOpen {
 			m.completions.SetItems(msg.Files, msg.Resources)
@@ -3177,6 +3214,7 @@ func (m *UI) refreshStyles() {
 		t.Attachments.Text,
 	)
 	m.todoSpinner.Style = t.Pills.TodoSpinner
+	m.updateSpinner.Style = t.Status.UpdateMessage
 	m.status.help.Styles = t.Help
 	m.chat.InvalidateRenderCaches()
 }
