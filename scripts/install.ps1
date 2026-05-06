@@ -8,24 +8,31 @@ $InstallDir = "$env:USERPROFILE\.megacli\bin"
 $BinaryName = "megacli.exe"
 
 function Get-LatestVersion {
-    $release = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest"
+    try {
+        $release = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest" -Headers @{ "User-Agent" = "MegaCLI-Installer" }
+    } catch {
+        throw "Failed to fetch latest release from GitHub: $_"
+    }
+    if (-not $release -or -not $release.tag_name) {
+        throw "No releases found for $Repo. Please check the repository."
+    }
     return $release.tag_name -replace '^v', ''
 }
 
 function Get-Architecture {
-    $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
-    switch ($arch) {
-        "X64"   { return "x86_64" }
-        "X86"   { return "x86_64" }
-        "Arm64" { return "arm64" }
+    $envArch = $env:PROCESSOR_ARCHITECTURE
+    switch ($envArch) {
+        "AMD64" { return "x86_64" }
+        "ARM64" { return "arm64" }
         default {
-            # Fallback: check PROCESSOR_ARCHITECTURE env var
-            $envArch = $env:PROCESSOR_ARCHITECTURE
-            switch ($envArch) {
-                "AMD64" { return "x86_64" }
-                "ARM64" { return "arm64" }
-                default { throw "Unsupported architecture: $arch ($envArch)" }
-            }
+            try {
+                $rtArch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+                switch ($rtArch) {
+                    "X64"   { return "x86_64" }
+                    "Arm64" { return "arm64" }
+                }
+            } catch {}
+            throw "Unsupported architecture: $envArch"
         }
     }
 }

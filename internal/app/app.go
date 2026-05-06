@@ -685,6 +685,11 @@ func (app *App) Shutdown() {
 
 // checkForUpdates checks for available updates and automatically applies them.
 func (app *App) checkForUpdates(ctx context.Context) {
+	if !version.IsRelease() {
+		slog.Info("Skipping update check for local build", "version", version.Version)
+		return
+	}
+
 	checkCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 

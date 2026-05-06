@@ -5,9 +5,16 @@ import "runtime/debug"
 // Build-time parameters set via -ldflags.
 
 var (
-	Version = "devel"
-	Commit  = "unknown"
+	Version    = "devel"
+	Commit     = "unknown"
+	ReleaseBuild = "false"
 )
+
+// IsRelease returns true only when built by CI with
+// -ldflags "-X ...ReleaseBuild=true".
+func IsRelease() bool {
+	return ReleaseBuild == "true"
+}
 
 // A user may install crush using `go install github.com/megacli/megacli@latest`.
 // without -ldflags, in which case the version above is unset. As a workaround
