@@ -30,21 +30,36 @@ git remote get-url origin
 
 ### 2. Determine Version
 
-Ask the user what version to release, or check the latest tag:
+Parse the user's keyword to decide which semver component to bump:
+
+| User says (Chinese) | User says (English) | Semver bump |
+|---|---|---|
+| 大版本 | major | MAJOR + 1, MINOR = 0, PATCH = 0 |
+| 小版本 | minor | MINOR + 1, PATCH = 0 |
+| patch / 补丁 | patch | PATCH + 1 |
+
+If the user does not specify, default to **patch** (补丁).
+
+Check the latest tag to calculate the new version:
 
 ```bash
 git tag --sort=-v:refname | head -5
 ```
 
-Version format: `vMAJOR.MINOR.PATCH` (e.g., `v1.0.0`, `v0.2.1`)
+Example: latest tag is `v0.4.0`.
+- "大版本" → `v1.0.0`
+- "小版本" → `v0.5.0`
+- "补丁" / no keyword → `v0.4.1`
+
+Version format: `vMAJOR.MINOR.PATCH`. Do NOT ask the user for a version number — compute it automatically from the latest tag and the keyword.
 
 ### 3. Security Audit Before Push
 
-**CRITICAL**: Before pushing, scan for sensitive information:
+**CRITICAL**: Before pushing, scan for sensitive information. Use the internal grep tool (not bash grep) to search for secrets:
 
-```bash
-# Check for API keys, secrets, tokens
-grep -rn "sk-\|api_key.*=.*['\"][^$]\|secret.*=.*['\"][^$]\|token.*=.*['\"][^$]" --include="*.go" --include="*.yml" --include="*.yaml" --include="*.json" . | grep -v "go.sum" | grep -v ".git/"
+```
+Pattern: sk-|api_key.*=.*['"][^$\{]|secret.*=.*['"][^$\{]|token.*=.*['"][^$\{]
+Include: *.go,*.yml,*.yaml,*.json
 ```
 
 If any real credentials are found, **STOP** and alert the user.
@@ -67,12 +82,7 @@ After pushing the tag, GitHub Actions will:
 3. Build binaries for Linux/macOS/Windows (amd64 + arm64)
 4. Create a GitHub Release with the binaries attached
 
-Check the status:
-```bash
-gh run list --workflow=megacli-release.yml --limit=1
-```
-
-Or visit: `https://github.com/rorikonn/MegaCLI/actions`
+Check the status at: `https://github.com/rorikonn/MegaCLI/actions`
 
 ## Configuration Files
 

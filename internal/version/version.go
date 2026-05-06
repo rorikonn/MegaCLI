@@ -1,6 +1,9 @@
 package version
 
-import "runtime/debug"
+import (
+	"runtime/debug"
+	"strings"
+)
 
 // Build-time parameters set via -ldflags.
 
@@ -21,12 +24,15 @@ func IsRelease() bool {
 // we use the embedded build version that *is* set when using `go install` (and
 // is only set for `go install` and not for `go build`).
 func init() {
+	if Version != "devel" {
+		return
+	}
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		return
 	}
 	mainVersion := info.Main.Version
 	if mainVersion != "" && mainVersion != "(devel)" {
-		Version = mainVersion
+		Version = strings.TrimSuffix(mainVersion, "+dirty")
 	}
 }
