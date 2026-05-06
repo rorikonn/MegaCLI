@@ -302,7 +302,7 @@ func replaceBinaryWindows(currentExe, newBinary string) error {
 		"ren \"%s\" \"%s\" >nul 2>&1\r\n"+
 		"move /y \"%s\" \"%s\" >nul 2>&1\r\n"+
 		"del /f \"%s\" >nul 2>&1\r\n"+
-		"del \"%%~f0\" >nul 2>&1\r\n",
+		"(goto) 2>nul & del \"%%~f0\"\r\n",
 		currentExe, filepath.Base(oldPath),
 		stagedPath, currentExe,
 		oldPath,
