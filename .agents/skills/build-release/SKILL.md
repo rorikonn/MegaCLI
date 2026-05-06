@@ -71,9 +71,10 @@ clean version like `0.4.0` and auto-update is **enabled**.
 ### Prerequisites
 
 - Git remote `origin` must point to `git@github.com:rorikonn/MegaCLI.git`
-- The branch must be clean (no uncommitted changes)
 - GitHub Actions must have the release workflow
   (`.github/workflows/megacli-release.yml`)
+- If there are uncommitted changes, commit them first **without asking the
+  user**. Use an appropriate semantic commit message based on the changes.
 
 ### 1. Pre-flight Checks
 
