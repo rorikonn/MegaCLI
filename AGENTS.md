@@ -86,9 +86,10 @@ internal/
 
 ## Build/Test/Lint Commands
 
-- **Build**: `go build -o megacli.exe .` (ALWAYS build `megacli.exe` after
-  any code change so the user can immediately test)
-- **Build (alt)**: `go run .`
+- **Build**: `task build:dev` (ALWAYS build `megacli.exe` after any code
+  change so the user can immediately test. Produces a dev package with
+  version+commit hash suffix, e.g. `0.4.0-1a2b3c4` or
+  `0.4.0-1a2b3c4-dirty`)
 - **Test**: `task test` or `go test ./...` (run single test:
   `go test ./internal/llm/prompt -run TestGetContextFromPaths`)
 - **Update Golden Files**: `go test ./... -update` (regenerates `.golden`
