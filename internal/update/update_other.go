@@ -2,7 +2,12 @@
 
 package update
 
+// ApplyPendingUpdate is a no-op on non-Windows platforms.
+// Unix systems can overwrite running binaries directly.
+func ApplyPendingUpdate() error {
+	return nil
+}
+
 func replaceBinaryWindows(_, _ string) error {
-	// This function is only called on Windows via runtime.GOOS check.
 	panic("replaceBinaryWindows called on non-Windows platform")
 }
