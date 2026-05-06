@@ -279,13 +279,33 @@ func replaceBinary(currentExe, newBinary string) error {
 }
 
 func replaceBinaryWindows(currentExe, newBinary string) error {
-	// Windows locks running executables. Create a bat script that
-	// waits for us to exit, then moves the new binary over the old.
+	// Windows locks running executables so we cannot overwrite
+	// them directly. We also cannot rely on newBinary staying
+	// alive because the caller may clean up the temp directory
+	// before the bat script runs.
+	//
+	// Strategy:
+	// 1. Copy the new binary next to the current exe.
+	// 2. Launch a bat script that:
+	//    a. Waits for this process to exit.
+	//    b. Renames the running exe out of the way.
+	//    c. Moves the staged binary into place.
+	//    d. Cleans up the old binary and itself.
+	stagedPath := currentExe + ".new"
+	if err := copyFile(newBinary, stagedPath); err != nil {
+		return fmt.Errorf("failed to stage update binary: %w", err)
+	}
+
+	oldPath := currentExe + ".old"
 	script := fmt.Sprintf("@echo off\r\n"+
 		"timeout /t 2 /nobreak >nul\r\n"+
+		"ren \"%s\" \"%s\" >nul 2>&1\r\n"+
 		"move /y \"%s\" \"%s\" >nul 2>&1\r\n"+
+		"del /f \"%s\" >nul 2>&1\r\n"+
 		"del \"%%~f0\" >nul 2>&1\r\n",
-		newBinary, currentExe,
+		currentExe, filepath.Base(oldPath),
+		stagedPath, currentExe,
+		oldPath,
 	)
 
 	scriptPath := currentExe + ".update.bat"
