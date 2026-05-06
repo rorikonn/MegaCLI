@@ -62,6 +62,150 @@ func providerIDForType(ptype string) string {
 	return defaultOpenAICompatProvider
 }
 
+// modelPreset defines the known attributes for a model or model family.
+type modelPreset struct {
+	ContextWindow          int64
+	DefaultMaxTokens       int64
+	CanReason              bool
+	ReasoningLevels        []string
+	DefaultReasoningEffort string
+	SupportsImages         bool
+}
+
+// modelPresetEntry maps a pattern to a preset. Entries are checked in
+// order; first match wins.
+type modelPresetEntry struct {
+	Pattern string      // model ID or substring to match
+	Exact   bool        // require exact (case-insensitive) match
+	Preset  modelPreset //nolint:govet
+}
+
+// defaultPreset is used for chat models that don't match any known preset.
+var defaultPreset = modelPreset{
+	ContextWindow:    200000,
+	DefaultMaxTokens: 16384,
+}
+
+// modelPresets is the preset registry. Exact matches are listed first,
+// followed by substring matches ordered from most specific to least
+// specific within each family.
+var modelPresets = []modelPresetEntry{
+	// ---- Exact matches (unique parameters) ----
+	{Pattern: "gemini-3-pro-image-preview", Exact: true, Preset: modelPreset{
+		ContextWindow: 65000, DefaultMaxTokens: 16384, CanReason: true, SupportsImages: true,
+	}},
+	{Pattern: "gemini-3.1-flash-image-preview", Exact: true, Preset: modelPreset{
+		ContextWindow: 65000, DefaultMaxTokens: 16384, CanReason: true, SupportsImages: true,
+	}},
+	{Pattern: "glm-5.1", Exact: true, Preset: modelPreset{
+		ContextWindow: 200000, DefaultMaxTokens: 16384, CanReason: true,
+	}},
+	{Pattern: "glm-5", Exact: true, Preset: modelPreset{
+		ContextWindow: 202000, DefaultMaxTokens: 16384, CanReason: true,
+	}},
+	{Pattern: "MiniMax-M2.7", Exact: true, Preset: modelPreset{
+		ContextWindow: 204000, DefaultMaxTokens: 16384,
+	}},
+	{Pattern: "gui-plus", Exact: true, Preset: modelPreset{
+		ContextWindow: 250000, DefaultMaxTokens: 16384, SupportsImages: true,
+	}},
+
+	// ---- Substring matches (most specific first) ----
+
+	// Claude
+	{Pattern: "claude-haiku", Preset: modelPreset{
+		ContextWindow: 200000, DefaultMaxTokens: 16384, CanReason: true, SupportsImages: true,
+	}},
+	{Pattern: "claude", Preset: modelPreset{
+		ContextWindow: 1000000, DefaultMaxTokens: 16384, CanReason: true, SupportsImages: true,
+	}},
+
+	// GPT (specific variants before family fallback)
+	{Pattern: "gpt-5.3-codex", Preset: modelPreset{
+		ContextWindow: 400000, DefaultMaxTokens: 16384, CanReason: true,
+		ReasoningLevels:        []string{"none", "low", "medium", "high", "xhigh"},
+		DefaultReasoningEffort: "medium", SupportsImages: true,
+	}},
+	{Pattern: "gpt-5.4-mini", Preset: modelPreset{
+		ContextWindow: 400000, DefaultMaxTokens: 16384, CanReason: true,
+		ReasoningLevels:        []string{"none", "low", "medium", "high", "xhigh"},
+		DefaultReasoningEffort: "medium", SupportsImages: true,
+	}},
+	{Pattern: "gpt-5.4-nano", Preset: modelPreset{
+		ContextWindow: 400000, DefaultMaxTokens: 16384, CanReason: true,
+		ReasoningLevels:        []string{"none", "low", "medium", "high", "xhigh"},
+		DefaultReasoningEffort: "medium", SupportsImages: true,
+	}},
+	{Pattern: "gpt", Preset: modelPreset{
+		ContextWindow: 1050000, DefaultMaxTokens: 16384, CanReason: true,
+		ReasoningLevels:        []string{"none", "low", "medium", "high", "xhigh"},
+		DefaultReasoningEffort: "medium", SupportsImages: true,
+	}},
+
+	// Gemini (image variants handled by exact match above)
+	{Pattern: "gemini", Preset: modelPreset{
+		ContextWindow: 1048000, DefaultMaxTokens: 16384, CanReason: true, SupportsImages: true,
+	}},
+
+	// Doubao
+	{Pattern: "doubao-seed", Preset: modelPreset{
+		ContextWindow: 256000, DefaultMaxTokens: 16384, CanReason: true,
+		ReasoningLevels:        []string{"minimal", "low", "medium", "high"},
+		DefaultReasoningEffort: "medium", SupportsImages: true,
+	}},
+
+	// DeepSeek
+	{Pattern: "deepseek", Preset: modelPreset{
+		ContextWindow: 1024000, DefaultMaxTokens: 16384, CanReason: true,
+	}},
+
+	// Qwen (specific variants first)
+	{Pattern: "qwen3-vl", Preset: modelPreset{
+		ContextWindow: 256000, DefaultMaxTokens: 16384, CanReason: true, SupportsImages: true,
+	}},
+	{Pattern: "qwen3.5-122b", Preset: modelPreset{
+		ContextWindow: 262000, DefaultMaxTokens: 16384, SupportsImages: true,
+	}},
+	{Pattern: "qwen", Preset: modelPreset{
+		ContextWindow: 1000000, DefaultMaxTokens: 16384, CanReason: true, SupportsImages: true,
+	}},
+
+	// kimi
+	{Pattern: "kimi-k2", Preset: modelPreset{
+		ContextWindow: 256000, DefaultMaxTokens: 16384, CanReason: true, SupportsImages: true,
+	}},
+}
+
+// lookupPreset finds the best matching preset for a model ID.
+// Returns the preset and true if a known match was found, or the
+// conservative default preset and false otherwise.
+func lookupPreset(modelID string) (modelPreset, bool) {
+	lower := strings.ToLower(modelID)
+	for _, entry := range modelPresets {
+		pattern := strings.ToLower(entry.Pattern)
+		if entry.Exact {
+			if lower == pattern {
+				return entry.Preset, true
+			}
+		} else if strings.Contains(lower, pattern) {
+			return entry.Preset, true
+		}
+	}
+	return defaultPreset, false
+}
+
+// isChatModel returns false for known non-chat model types such as
+// embedding, reranking, ASR, and image-generation models.
+func isChatModel(id string) bool {
+	lower := strings.ToLower(id)
+	for _, p := range []string{"embedding", "rerank", "asr", "bge-", "gpt-image"} {
+		if strings.Contains(lower, p) {
+			return false
+		}
+	}
+	return true
+}
+
 // templateConfig is the minimal config written on first run.
 // It intentionally omits models — those are populated interactively.
 var templateConfig = map[string]any{
@@ -281,8 +425,10 @@ func HasModelsConfigured(cfgPath string) (bool, error) {
 	return false, nil
 }
 
-// WriteModelsToConfig writes the selected models into the global config,
-// splitting them across anthropic and openai-compat providers based on model type.
+// WriteModelsToConfig writes models into the global config, enriching each
+// model with attributes from the preset registry. Non-chat models (embedding,
+// reranking, ASR, image-gen) are automatically excluded. Models are split
+// across anthropic and openai-compat providers based on model type.
 func WriteModelsToConfig(cfgPath string, models []ModelInfo) error {
 	raw, err := os.ReadFile(cfgPath)
 	if err != nil {
@@ -299,17 +445,33 @@ func WriteModelsToConfig(cfgPath string, models []ModelInfo) error {
 		providers = make(map[string]any)
 	}
 
-	// Group models by provider type.
+	// Group chat models by provider type, enriched with preset attributes.
 	anthropicModels := []map[string]any{}
 	openAICompatModels := []map[string]any{}
+	var chatModels []ModelInfo
+
 	for _, m := range models {
+		if !isChatModel(m.ID) {
+			continue
+		}
+		chatModels = append(chatModels, m)
+
+		preset, _ := lookupPreset(m.ID)
 		def := map[string]any{
 			"id":                   m.ID,
 			"name":                 m.ID,
-			"context_window":       200000,
-			"default_max_tokens":   16384,
-			"supports_attachments": true,
+			"context_window":       preset.ContextWindow,
+			"default_max_tokens":   preset.DefaultMaxTokens,
+			"supports_attachments": preset.SupportsImages,
+			"can_reason":           preset.CanReason,
 		}
+		if len(preset.ReasoningLevels) > 0 {
+			def["reasoning_levels"] = preset.ReasoningLevels
+		}
+		if preset.DefaultReasoningEffort != "" {
+			def["default_reasoning_effort"] = preset.DefaultReasoningEffort
+		}
+
 		if modelTypeDetect(m.ID) == "anthropic" {
 			anthropicModels = append(anthropicModels, def)
 		} else {
@@ -339,18 +501,18 @@ func WriteModelsToConfig(cfgPath string, models []ModelInfo) error {
 
 	cfgMap["providers"] = providers
 
-	// Build model selections using the correct provider per model.
+	// Auto-select large and small models from the first available chat model.
 	modelSelections := map[string]any{}
-	if len(models) > 0 {
-		firstModel := models[0]
-		firstProvider := providerIDForType(modelTypeDetect(firstModel.ID))
+	if len(chatModels) > 0 {
+		first := chatModels[0]
+		firstProvider := providerIDForType(modelTypeDetect(first.ID))
 		modelSelections["large"] = map[string]any{
 			"provider": firstProvider,
-			"model":    firstModel.ID,
+			"model":    first.ID,
 		}
 		modelSelections["small"] = map[string]any{
 			"provider": firstProvider,
-			"model":    firstModel.ID,
+			"model":    first.ID,
 		}
 	}
 	cfgMap["models"] = modelSelections

@@ -29,9 +29,11 @@ import (
 	"charm.land/fantasy/providers/bedrock"
 	"charm.land/fantasy/providers/google"
 	"charm.land/fantasy/providers/openai"
+	"charm.land/fantasy/providers/openaicompat"
 	"charm.land/fantasy/providers/openrouter"
 	"charm.land/fantasy/providers/vercel"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/exp/charmtone"
 	"github.com/megacli/megacli/internal/agent/hyper"
 	"github.com/megacli/megacli/internal/agent/notify"
 	"github.com/megacli/megacli/internal/agent/tools"
@@ -43,7 +45,6 @@ import (
 	"github.com/megacli/megacli/internal/session"
 	"github.com/megacli/megacli/internal/stringext"
 	"github.com/megacli/megacli/internal/version"
-	"github.com/charmbracelet/x/exp/charmtone"
 )
 
 const (
@@ -931,6 +932,7 @@ func (a *sessionAgent) getSessionMessages(ctx context.Context, session session.S
 // generateTitle generates a session titled based on the initial prompt.
 func (a *sessionAgent) generateTitle(ctx context.Context, sessionID string, userPrompt string) {
 	if userPrompt == "" {
+		slog.Debug("Skipping title generation: empty prompt", "session_id", sessionID)
 		return
 	}
 
@@ -938,21 +940,32 @@ func (a *sessionAgent) generateTitle(ctx context.Context, sessionID string, user
 	largeModel := a.largeModel.Get()
 	systemPromptPrefix := a.systemPromptPrefix.Get()
 
-	var maxOutputTokens int64 = 40
+	// Use a generous baseline even for non-thinking models: some models
+	// burn tokens on invisible internal processing before emitting text.
+	var maxOutputTokens int64 = 1024
 	if smallModel.CatwalkCfg.CanReason {
 		maxOutputTokens = smallModel.CatwalkCfg.DefaultMaxTokens
 	}
 
 	newAgent := func(m fantasy.LanguageModel, p []byte, tok int64) fantasy.Agent {
 		return fantasy.NewAgent(m,
-			fantasy.WithSystemPrompt(string(p)+"\n /no_think"),
+			fantasy.WithSystemPrompt(string(p)),
 			fantasy.WithMaxOutputTokens(tok),
 			fantasy.WithUserAgent(userAgent),
 		)
 	}
 
+	noThink := openai.ReasoningEffortNone
 	streamCall := fantasy.AgentStreamCall{
-		Prompt: fmt.Sprintf("Generate a concise title for the following content:\n\n%s\n <think>\n\n</think>", userPrompt),
+		Prompt: fmt.Sprintf("Generate a concise title for the following content:\n\n%s", userPrompt),
+		ProviderOptions: fantasy.ProviderOptions{
+			openai.Name: &openai.ProviderOptions{
+				ReasoningEffort: &noThink,
+			},
+			openaicompat.Name: &openaicompat.ProviderOptions{
+				ReasoningEffort: &noThink,
+			},
+		},
 		PrepareStep: func(callCtx context.Context, opts fantasy.PrepareStepFunctionOptions) (_ context.Context, prepared fantasy.PrepareStepResult, err error) {
 			prepared.Messages = opts.Messages
 			if systemPromptPrefix != "" {
@@ -1002,15 +1015,29 @@ func (a *sessionAgent) generateTitle(ctx context.Context, sessionID string, user
 		return
 	}
 
-	// Clean up title.
-	var title string
-	title = strings.ReplaceAll(resp.Response.Content.Text(), "\n", " ")
+	// Extract title from the response, trying multiple sources.
+	rawTitle := resp.Response.Content.Text()
+	if rawTitle == "" {
+		rawTitle = resp.Response.Content.ReasoningText()
+	}
 
-	// Remove thinking tags if present.
+	slog.Debug("Title generation response",
+		"session_id", sessionID,
+		"model", model.Model.Model(),
+		"finish_reason", resp.Response.FinishReason,
+		"content_items", len(resp.Response.Content),
+		"text", resp.Response.Content.Text(),
+		"reasoning_text", resp.Response.Content.ReasoningText(),
+		"usage_output", resp.TotalUsage.OutputTokens,
+	)
+
+	// Remove thinking tags and clean up whitespace.
+	title := strings.ReplaceAll(rawTitle, "\n", " ")
 	title = thinkTagRegex.ReplaceAllString(title, "")
 	title = orphanThinkTagRegex.ReplaceAllString(title, "")
-
 	title = strings.TrimSpace(title)
+
+	slog.Debug("Title generation result", "session_id", sessionID, "raw", rawTitle, "cleaned", title)
 	title = cmp.Or(title, DefaultSessionName)
 
 	// Calculate usage and cost.
