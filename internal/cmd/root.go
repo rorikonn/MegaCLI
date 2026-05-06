@@ -114,7 +114,7 @@ crush --continue
 		if manualUpdate {
 			ctx := cmd.Context()
 			fmt.Println("Checking for updates...")
-			info, err := update.Check(ctx, version.Version, update.Default)
+			info, err := update.Check(ctx, version.Version)
 			if err != nil {
 				return fmt.Errorf("failed to check for updates: %w", err)
 			}

@@ -97,11 +97,6 @@ type App struct {
 
 // New initializes a new application instance.
 func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore) (*App, error) {
-	// Apply any staged update from a previous run (Windows only).
-	if err := update.ApplyPendingUpdate(); err != nil {
-		slog.Warn("Failed to apply pending update", "error", err)
-	}
-
 	q := db.New(conn)
 	sessions := session.NewService(q, conn)
 	messages := message.NewService(q)
@@ -704,7 +699,7 @@ func (app *App) checkForUpdates(ctx context.Context) {
 	checkCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	info, err := update.Check(checkCtx, version.Version, update.Default)
+	info, err := update.Check(checkCtx, version.Version)
 	if err != nil || !info.Available() {
 		return
 	}
