@@ -1,5 +1,11 @@
 # Crush Development Guide
 
+## Mandatory Post-Edit Actions
+
+- After ANY code change (edit/write to .go files), ALWAYS run a dev build
+  (using the `build-release` skill's dev build commands) before responding
+  to the user. No exceptions.
+
 ## Project Overview
 
 Crush is a terminal-based AI coding assistant built in Go by

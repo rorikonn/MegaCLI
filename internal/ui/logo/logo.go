@@ -18,6 +18,11 @@ type letterform func(bool) string
 
 const diag = `╱`
 
+// narrowMode reduces letterform widths by 1 when set. It is toggled by Render
+// during compact rendering and is safe because logo rendering is
+// single-goroutine (UI thread only).
+var narrowMode bool
+
 // Opts are the options for rendering the Crush title art.
 type Opts struct {
 	FieldColor   color.Color // diagonal lines
@@ -50,7 +55,7 @@ func Render(base lipgloss.Style, version string, compact bool, o Opts) string {
 	}
 
 	// Title.
-	const spacing = 1
+	spacing := 1
 	var hyperLetterforms []letterform
 	if o.Hyper {
 		hyperLetterforms = []letterform{
@@ -93,10 +98,12 @@ func Render(base lipgloss.Style, version string, compact bool, o Opts) string {
 		// Stretch a random letterform on every render.
 		stretchIndex = rand.IntN(len(crushLetterforms))
 	}
+	narrowMode = compact
 	crush := renderWord(spacing, stretchIndex, crushLetterforms...)
 	if o.Hyper && compact {
 		crush = renderWord(spacing, stretchIndex, hyperLetterforms...) + "\n" + crush
 	}
+	narrowMode = false
 	crushWidth := lipgloss.Width(crush)
 	b := new(strings.Builder)
 	for r := range strings.SplitSeq(crush, "\n") {

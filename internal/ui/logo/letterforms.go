@@ -553,6 +553,9 @@ func stretchLetterformPart(s string, p letterformProps) string {
 		p.minStretch, p.maxStretch = p.maxStretch, p.minStretch
 	}
 	n := p.width
+	if narrowMode && n > 1 {
+		n--
+	}
 	if p.stretch {
 		n = cachedRandN(p.maxStretch-p.minStretch) + p.minStretch //nolint:gosec
 	}

@@ -241,7 +241,7 @@ type UI struct {
 	// skills
 	skillStates []*skills.SkillState
 
-	// sidebarLogo keeps a cached version of the sidebar sidebarLogo.
+	// sidebarLogo keeps a cached version of the sidebar logo.
 	sidebarLogo string
 
 	// Notification state
@@ -273,6 +273,11 @@ type UI struct {
 
 	// mouse highlighting related state
 	lastClickTime time.Time
+
+	// lastImagePasteAt tracks the last time an image paste was triggered
+	// to prevent duplicate pastes from press+release or paste+release
+	// events arriving in quick succession.
+	lastImagePasteAt time.Time
 
 	// hyperCredits is the remaining Hyper credits, updated after each prompt.
 	hyperCredits *int
@@ -872,6 +877,10 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		if cmd := m.handleKeyPressMsg(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	case tea.KeyReleaseMsg:
+		if cmd := m.handleKeyReleaseMsg(msg); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 	case tea.PasteMsg:
@@ -1906,12 +1915,13 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 					cmds = append(cmds, cmd)
 				}
 
-			case key.Matches(msg, m.keyMap.Editor.PasteImage):
-				if m.currentModelSupportsImages() {
-					cmds = append(cmds, m.pasteImageFromClipboard)
-				} else {
-					cmds = append(cmds, m.pasteTextFromClipboard)
-				}
+		case key.Matches(msg, m.keyMap.Editor.PasteImage):
+			if m.currentModelSupportsImages() {
+				m.lastImagePasteAt = time.Now()
+				cmds = append(cmds, m.pasteImageFromClipboard)
+			} else {
+				cmds = append(cmds, m.pasteTextFromClipboard)
+			}
 
 			case key.Matches(msg, m.keyMap.Editor.SendMessage):
 				prevHeight := m.textarea.Height()
@@ -2651,7 +2661,7 @@ func (m *UI) generateLayout(w, h int) uiLayout {
 	// The editor height: textarea height + margin for attachments and bottom spacing.
 	editorHeight := m.textarea.Height() + editorHeightMargin
 	// The sidebar width
-	sidebarWidth := 30
+	sidebarWidth := 38
 	// The header height
 	const landingHeaderHeight = 4
 
@@ -3143,11 +3153,6 @@ func (m *UI) renderEditorView(width int) string {
 	}, "\n")
 }
 
-// cacheSidebarLogo renders and caches the sidebar logo at the specified width.
-func (m *UI) cacheSidebarLogo(width int) {
-	m.sidebarLogo = renderLogo(m.com.Styles, true, m.com.IsHyper(), width)
-}
-
 // applyTheme replaces the active styles with the given theme and
 // refreshes every component that caches style data.
 func (m *UI) applyTheme(s styles.Styles) {
@@ -3538,6 +3543,34 @@ func (m *UI) newSession() tea.Cmd {
 	)
 }
 
+// handleKeyReleaseMsg handles key release events. Windows Terminal 1.25+
+// with Kitty keyboard swallows Ctrl+V press but leaks the release when
+// the clipboard contains only image data (no text). We use the release
+// event as a fallback trigger for clipboard image paste.
+func (m *UI) handleKeyReleaseMsg(msg tea.KeyReleaseMsg) tea.Cmd {
+	if m.focus != uiFocusEditor {
+		return nil
+	}
+
+	k := msg.Key()
+	if k.Code != 'v' || k.Mod&tea.ModCtrl == 0 {
+		return nil
+	}
+
+	if !m.currentModelSupportsImages() {
+		return nil
+	}
+
+	// Skip if a paste was already triggered recently by a KeyPressMsg or
+	// PasteMsg to avoid duplicate attachments.
+	if time.Since(m.lastImagePasteAt) < 500*time.Millisecond {
+		return nil
+	}
+
+	m.lastImagePasteAt = time.Now()
+	return m.pasteImageFromClipboard
+}
+
 // handlePasteMsg handles a paste message.
 func (m *UI) handlePasteMsg(msg tea.PasteMsg) tea.Cmd {
 	if m.dialog.HasDialogs() {
@@ -3551,6 +3584,7 @@ func (m *UI) handlePasteMsg(msg tea.PasteMsg) tea.Cmd {
 	// If paste content is empty, the terminal may have intercepted Ctrl+V but
 	// found no text on the clipboard. Try reading image data directly.
 	if msg.Content == "" && m.currentModelSupportsImages() {
+		m.lastImagePasteAt = time.Now()
 		return m.pasteImageFromClipboard
 	}
 
@@ -3901,6 +3935,11 @@ func (m *UI) disableDockerMCP() tea.Msg {
 	}
 
 	return util.NewInfoMsg("Docker MCP disabled successfully")
+}
+
+// cacheSidebarLogo renders and caches the sidebar logo at the specified width.
+func (m *UI) cacheSidebarLogo(width int) {
+	m.sidebarLogo = renderLogo(m.com.Styles, true, m.com.IsHyper(), width)
 }
 
 // renderLogo renders the Crush logo with the given styles and dimensions.
