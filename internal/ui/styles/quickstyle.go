@@ -677,10 +677,8 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Tool.HookRewrote = base.Foreground(o.bgMostVisible)
 
 	// ShowFile bordered display.
-	showFileBorder := lipgloss.RoundedBorder()
 	s.Tool.ShowFileBorder = lipgloss.NewStyle().
-		Border(showFileBorder).
-		BorderRight(false).
+		Border(lipgloss.RoundedBorder()).
 		BorderForeground(o.fgMoreSubtle).
 		PaddingLeft(1)
 	s.Tool.ShowFileTitle = base.Foreground(o.info)
