@@ -56,7 +56,6 @@ func (m *UI) skillsInfo(width, maxItems int, isSection bool) string {
 func (m *UI) skillStatusItems() []skillStatusItem {
 	t := m.com.Styles
 	var items []skillStatusItem
-	stateNames := make(map[string]struct{}, len(m.skillStates))
 
 	disabledSet := make(map[string]bool)
 	if m.com != nil && m.com.Workspace != nil {
@@ -67,7 +66,16 @@ func (m *UI) skillStatusItems() []skillStatusItem {
 		}
 	}
 
-	states := slices.Clone(m.skillStates)
+	// Use pubsub-delivered states if available, otherwise fall back to the
+	// global snapshot. This handles the race where discovery completes before
+	// the TUI subscribes to events.
+	states := m.skillStates
+	if len(states) == 0 {
+		states = skills.GetStates()
+	}
+
+	stateNames := make(map[string]struct{}, len(states))
+	states = slices.Clone(states)
 	slices.SortStableFunc(states, func(a, b *skills.SkillState) int {
 		return strings.Compare(a.Path, b.Path)
 	})

@@ -284,6 +284,11 @@ type UI struct {
 	// events arriving in quick succession.
 	lastImagePasteAt time.Time
 
+	// lastVKeyPressAt tracks the last time a 'v' KeyPressMsg was received.
+	// Used by handleKeyReleaseMsg to distinguish a normal V release from a
+	// swallowed Ctrl+V release on Windows Terminal.
+	lastVKeyPressAt time.Time
+
 	// hyperCredits is the remaining Hyper credits, updated after each prompt.
 	hyperCredits *int
 
@@ -1820,6 +1825,12 @@ func (m *UI) openAuthenticationDialog(provider catwalk.Provider, model config.Se
 func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 	var cmds []tea.Cmd
 
+	// Track 'v' key presses so handleKeyReleaseMsg can distinguish a
+	// normal V release from a swallowed Ctrl+V on Windows Terminal.
+	if msg.Key().Code == 'v' {
+		m.lastVKeyPressAt = time.Now()
+	}
+
 	handleGlobalKeys := func(msg tea.KeyPressMsg) bool {
 		switch {
 		case key.Matches(msg, m.keyMap.Help):
@@ -1957,13 +1968,13 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 					cmds = append(cmds, cmd)
 				}
 
-		case key.Matches(msg, m.keyMap.Editor.PasteImage):
-			if m.currentModelSupportsImages() {
-				m.lastImagePasteAt = time.Now()
-				cmds = append(cmds, m.pasteImageFromClipboard)
-			} else {
-				cmds = append(cmds, m.pasteTextFromClipboard)
-			}
+			case key.Matches(msg, m.keyMap.Editor.PasteImage):
+				if m.currentModelSupportsImages() {
+					m.lastImagePasteAt = time.Now()
+					cmds = append(cmds, m.pasteImageFromClipboard)
+				} else {
+					cmds = append(cmds, m.pasteTextFromClipboard)
+				}
 
 			case key.Matches(msg, m.keyMap.Editor.SendMessage):
 				prevHeight := m.textarea.Height()
@@ -2290,7 +2301,7 @@ func (m *UI) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 			x = screenW - w
 		}
 		x = max(0, x)
-		y = max(0, y+1) // Offset for attachments row
+		y = max(0, y)
 
 		completionsView := uv.NewStyledString(m.completions.Render())
 		completionsView.Draw(scr, image.Rectangle{
@@ -2329,8 +2340,8 @@ func (m *UI) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 
 		if m.textarea.Focused() {
 			cur := m.textarea.Cursor()
-			cur.X++                            // Adjust for app margins
-			cur.Y += m.layout.editor.Min.Y + 1 // Offset for attachments row
+			cur.X++ // Adjust for app margins
+			cur.Y += m.layout.editor.Min.Y + m.editorContentOffset()
 			return cur
 		}
 	}
@@ -3121,15 +3132,16 @@ func (m *UI) insertMCPResourceCompletion(item completions.ResourceCompletionValu
 // completionsPosition returns the X and Y position for the completions popup.
 func (m *UI) completionsPosition() image.Point {
 	cur := m.textarea.Cursor()
+	offset := m.editorContentOffset()
 	if cur == nil {
 		return image.Point{
 			X: m.layout.editor.Min.X,
-			Y: m.layout.editor.Min.Y,
+			Y: m.layout.editor.Min.Y + offset,
 		}
 	}
 	return image.Point{
 		X: cur.X + m.layout.editor.Min.X,
-		Y: m.layout.editor.Min.Y + cur.Y,
+		Y: m.layout.editor.Min.Y + offset + cur.Y,
 	}
 }
 
@@ -3188,10 +3200,23 @@ func (m *UI) randomizePlaceholders() {
 // for the agent indicator, attachments row, and bottom spacing.
 func (m *UI) editorMargin() int {
 	margin := editorHeightMargin
-	if m.com.Workspace.AgentCurrent() != "" {
+	if m.com.Workspace != nil && m.com.Workspace.AgentCurrent() != "" {
 		margin++
 	}
 	return margin
+}
+
+// editorContentOffset returns the number of lines rendered above the textarea
+// in the editor area (agent indicator and/or attachments row).
+func (m *UI) editorContentOffset() int {
+	offset := 0
+	if m.com.Workspace != nil && m.com.Workspace.AgentCurrent() != "" {
+		offset++
+	}
+	if m.attachments != nil && len(m.attachments.List()) > 0 {
+		offset++
+	}
+	return offset
 }
 
 // renderEditorView renders the editor view with attachments if any.
@@ -3625,17 +3650,29 @@ func (m *UI) newSession() tea.Cmd {
 // with Kitty keyboard swallows Ctrl+V press but leaks the release when
 // the clipboard contains only image data (no text). We use the release
 // event as a fallback trigger for clipboard image paste.
+//
+// We detect a swallowed press by checking whether we received a
+// corresponding KeyPressMsg for 'v' recently. If we did, this release
+// is from normal typing; if we didn't, the press was likely intercepted
+// by the terminal for a clipboard operation.
 func (m *UI) handleKeyReleaseMsg(msg tea.KeyReleaseMsg) tea.Cmd {
 	if m.focus != uiFocusEditor {
 		return nil
 	}
 
 	k := msg.Key()
-	if k.Code != 'v' || k.Mod&tea.ModCtrl == 0 {
+	if k.Code != 'v' {
 		return nil
 	}
 
 	if !m.currentModelSupportsImages() {
+		return nil
+	}
+
+	// If we received a normal 'v' KeyPressMsg recently, this release is
+	// from a regular keystroke (already handled by the editor or the
+	// PasteImage case). Skip.
+	if time.Since(m.lastVKeyPressAt) < 500*time.Millisecond {
 		return nil
 	}
 
@@ -3659,9 +3696,11 @@ func (m *UI) handlePasteMsg(msg tea.PasteMsg) tea.Cmd {
 		return nil
 	}
 
-	// If paste content is empty, the terminal may have intercepted Ctrl+V but
-	// found no text on the clipboard. Try reading image data directly.
-	if msg.Content == "" && m.currentModelSupportsImages() {
+	// If paste content is empty (or contains only null bytes / whitespace),
+	// the terminal may have intercepted Ctrl+V but found no text on the
+	// clipboard. Try reading image data directly.
+	trimmedContent := strings.TrimSpace(strings.ReplaceAll(msg.Content, "\x00", ""))
+	if trimmedContent == "" && m.currentModelSupportsImages() {
 		m.lastImagePasteAt = time.Now()
 		return m.pasteImageFromClipboard
 	}

@@ -68,7 +68,23 @@ type Event struct {
 	States []*SkillState
 }
 
-var broker = pubsub.NewBroker[Event]()
+var (
+	broker = pubsub.NewBroker[Event]()
+
+	// latestStates holds the most recent discovery states so that late
+	// subscribers (e.g. the TUI) can retrieve them without relying on
+	// receiving the pubsub event in time.
+	latestStates   []*SkillState
+	latestStatesMu sync.RWMutex
+)
+
+// GetStates returns the latest skill discovery states. This is safe to call
+// at any time and returns nil if discovery has not yet run.
+func GetStates() []*SkillState {
+	latestStatesMu.RLock()
+	defer latestStatesMu.RUnlock()
+	return latestStates
+}
 
 // SubscribeEvents returns a channel that receives events when skill discovery state changes.
 func SubscribeEvents(ctx context.Context) <-chan pubsub.Event[Event] {
@@ -252,6 +268,10 @@ func DiscoverWithStates(paths []string) ([]*Skill, []*SkillState) {
 		}
 		return left < right
 	})
+
+	latestStatesMu.Lock()
+	latestStates = states
+	latestStatesMu.Unlock()
 
 	broker.Publish(pubsub.UpdatedEvent, Event{States: states})
 	return skills, states
