@@ -28,7 +28,7 @@ type KeyMap struct {
 		AddAttachment  key.Binding
 		Cancel         key.Binding
 		Tab            key.Binding
-		Details        key.Binding
+		Review         key.Binding
 		TogglePills    key.Binding
 		PillLeft       key.Binding
 		PillRight      key.Binding
@@ -57,11 +57,11 @@ type KeyMap struct {
 	}
 
 	// Global key maps
-	Quit     key.Binding
-	Help     key.Binding
-	Commands key.Binding
-	Models   key.Binding
-	Suspend  key.Binding
+	Quit      key.Binding
+	Help      key.Binding
+	Commands  key.Binding
+	Models    key.Binding
+	Suspend   key.Binding
 	Sessions  key.Binding
 	Tab       key.Binding
 	Agents    key.Binding
@@ -126,11 +126,8 @@ func DefaultKeyMap() KeyMap {
 		key.WithHelp("ctrl+o", "open editor"),
 	)
 	km.Editor.Newline = key.NewBinding(
-		key.WithKeys("shift+enter", "ctrl+j"),
-		// "ctrl+j" is a common keybinding for newline in many editors. If
-		// the terminal supports "shift+enter", we substitute the help tex
-		// to reflect that.
-		key.WithHelp("ctrl+j", "newline"),
+		key.WithKeys("shift+enter", "ctrl+enter", "ctrl+j"),
+		key.WithHelp("ctrl+enter", "newline"),
 	)
 	km.Editor.AddImage = key.NewBinding(
 		key.WithKeys("ctrl+f"),
@@ -183,9 +180,9 @@ func DefaultKeyMap() KeyMap {
 		key.WithKeys("tab"),
 		key.WithHelp("tab", "change focus"),
 	)
-	km.Chat.Details = key.NewBinding(
+	km.Chat.Review = key.NewBinding(
 		key.WithKeys("ctrl+d"),
-		key.WithHelp("ctrl+d", "toggle details"),
+		key.WithHelp("ctrl+d", "review changes"),
 	)
 	km.Chat.TogglePills = key.NewBinding(
 		key.WithKeys("ctrl+t", "ctrl+space"),

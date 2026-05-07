@@ -5,13 +5,13 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/megacli/megacli/internal/config"
 	"github.com/megacli/megacli/internal/fsext"
 	"github.com/megacli/megacli/internal/session"
 	"github.com/megacli/megacli/internal/ui/common"
 	"github.com/megacli/megacli/internal/ui/styles"
-	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/charmbracelet/x/ansi"
 )
 
 const (
@@ -67,7 +67,6 @@ func (h *header) drawHeader(
 	area uv.Rectangle,
 	session *session.Session,
 	compact bool,
-	detailsOpen bool,
 	width int,
 	hyperCredits *int,
 ) {
@@ -100,7 +99,6 @@ func (h *header) drawHeader(
 		h.com,
 		session,
 		lspErrorCount,
-		detailsOpen,
 		availDetailWidth,
 		hyperCredits,
 	)
@@ -131,7 +129,6 @@ func renderHeaderDetails(
 	com *common.Common,
 	session *session.Session,
 	lspErrorCount int,
-	detailsOpen bool,
 	availWidth int,
 	hyperCredits *int,
 ) string {
@@ -154,13 +151,6 @@ func renderHeaderDetails(
 	if com.IsHyper() && hyperCredits != nil {
 		hc := t.Header.Hypercredit.Render(styles.HypercreditIcon) + " " + t.Header.Percentage.Render(common.FormatCredits(*hyperCredits))
 		parts = append(parts, hc)
-	}
-
-	const keystroke = "ctrl+d"
-	if detailsOpen {
-		parts = append(parts, t.Header.Keystroke.Render(keystroke)+t.Header.KeystrokeTip.Render(" close"))
-	} else {
-		parts = append(parts, t.Header.Keystroke.Render(keystroke)+t.Header.KeystrokeTip.Render(" open "))
 	}
 
 	dot := t.Header.Separator.Render(" • ")

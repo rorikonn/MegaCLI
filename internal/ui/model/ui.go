@@ -33,9 +33,9 @@ import (
 	"github.com/megacli/megacli/internal/agent/hyper"
 	"github.com/megacli/megacli/internal/agent/notify"
 	agenttools "github.com/megacli/megacli/internal/agent/tools"
-	"github.com/megacli/megacli/internal/askuser"
 	"github.com/megacli/megacli/internal/agent/tools/mcp"
 	"github.com/megacli/megacli/internal/app"
+	"github.com/megacli/megacli/internal/askuser"
 	"github.com/megacli/megacli/internal/commands"
 	"github.com/megacli/megacli/internal/config"
 	"github.com/megacli/megacli/internal/fsext"
@@ -80,9 +80,6 @@ const pasteLinesThreshold = 10
 
 // If pasted text has more than 1000 columns, treat it as a file attachment.
 const pasteColsThreshold = 1000
-
-// Session details panel max height.
-const sessionDetailsMaxHeight = 20
 
 // TextareaMaxHeight is the maximum height of the prompt textarea.
 const TextareaMaxHeight = 15
@@ -215,8 +212,7 @@ type UI struct {
 	// Attachment list
 	attachments *attachments.Attachments
 
-	readyPlaceholder   string
-	workingPlaceholder string
+	readyPlaceholder string
 
 	// Completions state
 	completions              *completions.Completions
@@ -259,9 +255,6 @@ type UI struct {
 	// by user toggle or auto-switch based on window size)
 	isCompact bool
 
-	// detailsOpen tracks whether the details panel is open (in compact mode)
-	detailsOpen bool
-
 	// pills state
 	pillsExpanded      bool
 	focusedPillSection pillSection
@@ -271,6 +264,11 @@ type UI struct {
 	// Todo spinner
 	todoSpinner    spinner.Model
 	todoIsSpinning bool
+
+	// Agent activity spinner and status text.
+	agentSpinner    spinner.Model
+	agentIsSpinning bool
+	agentActivity   string
 
 	// Update spinner shown while downloading an update.
 	updateSpinner    spinner.Model
@@ -341,6 +339,10 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 		spinner.WithStyle(com.Styles.Pills.TodoSpinner),
 	)
 
+	agentSpinner := spinner.New(
+		spinner.WithSpinner(spinner.MiniDot),
+	)
+
 	updateSpinner := spinner.New(
 		spinner.WithSpinner(spinner.Dot),
 		spinner.WithStyle(com.Styles.Status.UpdateMessage),
@@ -373,6 +375,7 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 		completions:         comp,
 		attachments:         attachments,
 		todoSpinner:         todoSpinner,
+		agentSpinner:        agentSpinner,
 		updateSpinner:       updateSpinner,
 		lspStates:           make(map[string]app.LSPClientInfo),
 		mcpStates:           make(map[string]mcp.ClientInfo),
@@ -388,8 +391,8 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 
 	status := NewStatus(com, ui)
 
-	ui.setEditorPrompt(false)
-	ui.randomizePlaceholders()
+	ui.setEditorPrompt(com.Workspace.PermissionSkipRequests())
+	ui.readyPlaceholder = placeholders[0]
 	ui.textarea.Placeholder = ui.readyPlaceholder
 	ui.status = status
 
@@ -740,7 +743,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.keyenh = msg
 		if msg.SupportsKeyDisambiguation() {
 			m.keyMap.Models.SetHelp("ctrl+m", "models")
-			m.keyMap.Editor.Newline.SetHelp("shift+enter", "newline")
+			m.keyMap.Editor.Newline.SetHelp("shift+enter", "newline") // Also ctrl+enter works
 		}
 	case copyChatHighlightMsg:
 		cmds = append(cmds, m.copyChatHighlight())
@@ -897,6 +900,13 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 		}
+		if m.agentIsSpinning {
+			var cmd tea.Cmd
+			m.agentSpinner, cmd = m.agentSpinner.Update(msg)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
 		if m.isUpdating {
 			var cmd tea.Cmd
 			m.updateSpinner, cmd = m.updateSpinner.Update(msg)
@@ -998,19 +1008,23 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Manage agent spinner state.
+	if m.isAgentBusy() && !m.agentIsSpinning {
+		m.agentIsSpinning = true
+		if m.agentActivity == "" {
+			m.agentActivity = "Thinking..."
+		}
+		cmds = append(cmds, m.agentSpinner.Tick)
+	} else if !m.isAgentBusy() && m.agentIsSpinning {
+		m.agentIsSpinning = false
+		m.agentActivity = ""
+	}
+
 	// This logic gets triggered on any message type, but should it?
 	switch m.focus {
 	case uiFocusMain:
 	case uiFocusEditor:
-		// Textarea placeholder logic
-		if m.isAgentBusy() {
-			m.textarea.Placeholder = m.workingPlaceholder
-		} else {
-			m.textarea.Placeholder = m.readyPlaceholder
-		}
-		if m.com.Workspace.PermissionSkipRequests() {
-			m.textarea.Placeholder = "Yolo mode!"
-		}
+		m.textarea.Placeholder = m.readyPlaceholder
 	}
 
 	// at this point this can only handle [message.Attachment] message, and we
@@ -1266,6 +1280,9 @@ func (m *UI) updateSessionMessage(msg message.Message) tea.Cmd {
 		}
 		if existingToolItem == nil {
 			items = append(items, chat.NewToolMessageItem(m.com.Styles, msg.ID, tc, nil, false))
+		}
+		if !tc.Finished && tc.Name != "" {
+			m.agentActivity = toolActivityLabel(tc.Name)
 		}
 	}
 
@@ -1872,10 +1889,13 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 			m.showInstances = !m.showInstances
 			m.updateLayoutAndSize()
 			return true
-		case key.Matches(msg, m.keyMap.Chat.Details) && m.isCompact:
-			m.detailsOpen = !m.detailsOpen
-			m.updateLayoutAndSize()
-			return true
+		case key.Matches(msg, m.keyMap.Chat.Review):
+			if m.state == uiChat && m.hasSession() {
+				if cmd := m.openReviewDialog(); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+				return true
+			}
 		case key.Matches(msg, m.keyMap.Chat.TogglePills):
 			if m.state == uiChat && m.hasSession() {
 				if cmd := m.togglePillsExpanded(); cmd != nil {
@@ -1999,6 +2019,12 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 					cmds = append(cmds, m.pasteTextFromClipboard)
 				}
 
+			case key.Matches(msg, m.keyMap.Editor.Newline):
+				prevHeight := m.textarea.Height()
+				m.textarea.InsertRune('\n')
+				m.closeCompletions()
+				cmds = append(cmds, m.updateTextareaWithPrevHeight(msg, prevHeight))
+
 			case m.askUser != nil && key.Matches(msg, m.keyMap.Editor.SendMessage):
 				m.confirmAskUser()
 				return nil
@@ -2060,11 +2086,6 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 					break
 				}
 				cmds = append(cmds, m.openEditor(m.textarea.Value()))
-			case key.Matches(msg, m.keyMap.Editor.Newline):
-				prevHeight := m.textarea.Height()
-				m.textarea.InsertRune('\n')
-				m.closeCompletions()
-				cmds = append(cmds, m.updateTextareaWithPrevHeight(msg, prevHeight))
 			case key.Matches(msg, m.keyMap.Editor.HistoryPrev):
 				cmd := m.handleHistoryUp(msg)
 				if cmd != nil {
@@ -2105,12 +2126,6 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 						depth, limit := m.com.Config().Options.TUI.Completions.Limits()
 						cmds = append(cmds, m.completions.Open(depth, limit))
 					}
-				}
-
-				// remove the details if they are open when user starts typing
-				if m.detailsOpen {
-					m.detailsOpen = false
-					m.updateLayoutAndSize()
 				}
 
 				prevHeight := m.textarea.Height()
@@ -2247,7 +2262,6 @@ func (m *UI) drawHeader(scr uv.Screen, area uv.Rectangle) {
 		area,
 		m.session,
 		m.isCompact,
-		m.detailsOpen,
 		area.Dx(),
 		m.hyperCredits,
 	)
@@ -2304,11 +2318,6 @@ func (m *UI) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		}
 		editor := uv.NewStyledString(m.renderEditorView(editorWidth))
 		editor.Draw(scr, layout.editor)
-
-		// Draw details overlay in compact mode when open
-		if m.isCompact && m.detailsOpen {
-			m.drawSessionDetails(scr, layout.sessionDetails)
-		}
 	}
 
 	isOnboarding := m.state == uiOnboarding
@@ -2360,11 +2369,6 @@ func (m *UI) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 			// Don't show cursor if editor is not visible
 			return nil
 		}
-		if m.detailsOpen && m.isCompact {
-			// Don't show cursor if details overlay is open
-			return nil
-		}
-
 		if m.textarea.Focused() {
 			cur := m.textarea.Cursor()
 			cur.X++ // Adjust for app margins
@@ -2456,6 +2460,7 @@ func (m *UI) ShortHelp() []key.Binding {
 			tab,
 			commands,
 			k.Models,
+			k.Agents,
 		)
 
 		switch m.focus {
@@ -2853,14 +2858,6 @@ func (m *UI) generateLayout(w, h int) uiLayout {
 				layout.Len(compactHeaderHeight),
 				layout.Fill(1),
 			).Split(appRect).Assign(&headerRect, &mainRect)
-			detailsHeight := min(sessionDetailsMaxHeight, area.Dy()-1) // One row for the header
-			var sessionDetailsArea image.Rectangle
-			layout.Vertical(
-				layout.Len(detailsHeight),
-				layout.Fill(1),
-			).Split(appRect).Assign(&sessionDetailsArea, new(image.Rectangle))
-			uiLayout.sessionDetails = sessionDetailsArea
-			uiLayout.sessionDetails.Min.Y += compactHeaderHeight // adjust for header
 			// Add one line gap between header and main content
 			mainRect.Min.Y += 1
 			var editorRect image.Rectangle
@@ -2957,9 +2954,6 @@ type uiLayout struct {
 
 	// status is the area for the status view.
 	status uv.Rectangle
-
-	// session details is the area for the session details overlay in compact mode.
-	sessionDetails uv.Rectangle
 }
 
 func (m *UI) openEditor(value string) tea.Cmd {
@@ -3213,27 +3207,33 @@ func mimeOf(content []byte) string {
 	return http.DetectContentType(content[:mimeBufferSize])
 }
 
-var readyPlaceholders = [...]string{
-	"Ready!",
-	"Ready...",
-	"Ready?",
-	"Ready for instructions",
+var placeholders = [...]string{
+	"make moba great again!",
+	"Ask me anything...",
+	"What can I help you with?",
+	"Type your request here...",
+	"Let's build something cool",
+	"What's on your mind?",
+	"Tell me what to do",
+	"Your wish is my command",
+	"Describe what you need...",
+	"I'm all ears",
+	"Fire away!",
+	"What's next?",
+	"Hit me with your best shot",
+	"Challenge accepted... probably",
+	"sudo make me a sandwich",
+	"// TODO: type something here",
+	"while(true) { await yourInput() }",
+	"git commit -m \"ask AI for help\"",
+	"Talk nerdy to me",
+	"Insert brilliant idea here",
+	"Press enter to send, or keep typing",
 }
 
-var workingPlaceholders = [...]string{
-	"Working!",
-	"Working...",
-	"Brrrrr...",
-	"Prrrrrrrr...",
-	"Processing...",
-	"Thinking...",
-}
-
-// randomizePlaceholders selects random placeholder text for the textarea's
-// ready and working states.
+// randomizePlaceholders selects a random placeholder text for the textarea.
 func (m *UI) randomizePlaceholders() {
-	m.workingPlaceholder = workingPlaceholders[rand.Intn(len(workingPlaceholders))]
-	m.readyPlaceholder = readyPlaceholders[rand.Intn(len(readyPlaceholders))]
+	m.readyPlaceholder = placeholders[rand.Intn(len(placeholders))]
 }
 
 // editorMargin returns the vertical margin for the editor area, accounting
@@ -3286,6 +3286,7 @@ func (m *UI) renderEditorView(width int) string {
 }
 
 // editorAgentIndicator renders the current agent name above the editor.
+// When the agent is busy, shows a spinner animation and activity status.
 func (m *UI) editorAgentIndicator(width int) string {
 	agentID := m.com.Workspace.AgentCurrent()
 	if agentID == "" {
@@ -3297,12 +3298,52 @@ func (m *UI) editorAgentIndicator(width int) string {
 		displayName = agentCfg.Name
 	}
 	t := m.com.Styles
+
+	const indent = "  "
+
+	if m.agentIsSpinning {
+		spinnerView := m.agentSpinner.View()
+		name := t.Sidebar.AgentName.Render(displayName)
+		activity := lipgloss.NewStyle().Faint(true).Render(m.agentActivity)
+		return lipgloss.NewStyle().Width(width).Render(
+			fmt.Sprintf("%s%s %s %s", indent, spinnerView, name, activity),
+		)
+	}
+
 	icon := t.Sidebar.AgentIcon.Render(styles.AgentIcon)
 	name := t.Sidebar.AgentName.Render(displayName)
-	hint := t.Editor.AgentHint.Render("ctrl+a")
+	status := "Ready!"
+	if m.com.Workspace.PermissionSkipRequests() {
+		status = "Ready! You only live once~"
+	}
+	statusView := lipgloss.NewStyle().Faint(true).Render(status)
 	return lipgloss.NewStyle().Width(width).Render(
-		fmt.Sprintf("%s %s %s", icon, name, hint),
+		fmt.Sprintf("%s%s %s %s", indent, icon, name, statusView),
 	)
+}
+
+// toolActivityLabel returns a human-readable activity label for a tool name.
+func toolActivityLabel(toolName string) string {
+	switch toolName {
+	case "edit", "multiedit":
+		return "Editing..."
+	case "write":
+		return "Writing..."
+	case "view":
+		return "Reading..."
+	case "bash":
+		return "Running command..."
+	case "glob", "grep", "ls":
+		return "Searching..."
+	case "web_search":
+		return "Searching web..."
+	case "web_fetch", "fetch":
+		return "Fetching..."
+	case "agent":
+		return "Delegating..."
+	default:
+		return "Working..."
+	}
 }
 
 // applyTheme replaces the active styles with the given theme and
@@ -3458,6 +3499,10 @@ func (m *UI) openDialog(id string) tea.Cmd {
 		if cmd := m.openQuitDialog(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+	case dialog.ReviewID:
+		if cmd := m.openReviewDialog(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	default:
 		// Unknown dialog
 		break
@@ -3475,6 +3520,36 @@ func (m *UI) openQuitDialog() tea.Cmd {
 
 	quitDialog := dialog.NewQuit(m.com)
 	m.dialog.OpenDialog(quitDialog)
+	return nil
+}
+
+// openReviewDialog opens the review changes dialog showing all file diffs.
+func (m *UI) openReviewDialog() tea.Cmd {
+	if m.dialog.ContainsDialog(dialog.ReviewID) {
+		m.dialog.BringToFront(dialog.ReviewID)
+		return nil
+	}
+
+	var files []dialog.ReviewFile
+	for _, f := range m.sessionFiles {
+		if f.Additions == 0 && f.Deletions == 0 {
+			continue
+		}
+		files = append(files, dialog.ReviewFile{
+			Path:       f.FirstVersion.Path,
+			OldContent: f.FirstVersion.Content,
+			NewContent: f.LatestVersion.Content,
+			Additions:  f.Additions,
+			Deletions:  f.Deletions,
+		})
+	}
+
+	if len(files) == 0 {
+		return nil
+	}
+
+	reviewDialog := dialog.NewReview(m.com, files)
+	m.dialog.OpenDialog(reviewDialog)
 	return nil
 }
 
@@ -3965,57 +4040,6 @@ func (m *UI) pasteIdx() int {
 		}
 	}
 	return result + 1
-}
-
-// drawSessionDetails draws the session details in compact mode.
-func (m *UI) drawSessionDetails(scr uv.Screen, area uv.Rectangle) {
-	if m.session == nil {
-		return
-	}
-
-	s := m.com.Styles
-
-	width := area.Dx() - s.CompactDetails.View.GetHorizontalFrameSize()
-	height := area.Dy() - s.CompactDetails.View.GetVerticalFrameSize()
-
-	title := s.CompactDetails.Title.Width(width).MaxHeight(2).Render(m.session.Title)
-	blocks := []string{
-		title,
-		"",
-		m.modelInfo(width),
-		"",
-	}
-
-	detailsHeader := lipgloss.JoinVertical(
-		lipgloss.Left,
-		blocks...,
-	)
-
-	version := s.CompactDetails.Version.Width(width).AlignHorizontal(lipgloss.Right).Render(version.Version)
-
-	remainingHeight := height - lipgloss.Height(detailsHeader) - lipgloss.Height(version)
-
-	const maxSectionWidth = 50
-	sectionWidth := max(1, min(maxSectionWidth, width/4-2)) // account for spacing between sections
-	maxItemsPerSection := remainingHeight - 3               // Account for section title and spacing
-
-	lspSection := m.lspInfo(sectionWidth, maxItemsPerSection, false)
-	mcpSection := m.mcpInfo(sectionWidth, maxItemsPerSection, false)
-	skillsSection := m.skillsInfo(sectionWidth, maxItemsPerSection, false)
-	filesSection := m.filesInfo(m.com.Workspace.WorkingDir(), sectionWidth, maxItemsPerSection, false)
-	sections := lipgloss.JoinHorizontal(lipgloss.Top, filesSection, " ", lspSection, " ", mcpSection, " ", skillsSection)
-	uv.NewStyledString(
-		s.CompactDetails.View.
-			Width(area.Dx()).
-			Render(
-				lipgloss.JoinVertical(
-					lipgloss.Left,
-					detailsHeader,
-					sections,
-					version,
-				),
-			),
-	).Draw(scr, area)
 }
 
 func (m *UI) runMCPPrompt(clientID, promptID string, arguments map[string]string) tea.Cmd {
