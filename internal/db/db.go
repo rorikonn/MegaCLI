@@ -135,6 +135,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.updateSessionTitleAndUsageStmt, err = db.PrepareContext(ctx, updateSessionTitleAndUsage); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateSessionTitleAndUsage: %w", err)
 	}
+	if q.updateSessionActiveAgentStmt, err = db.PrepareContext(ctx, updateSessionActiveAgent); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateSessionActiveAgent: %w", err)
+	}
 	return &q, nil
 }
 
@@ -325,6 +328,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateSessionTitleAndUsageStmt: %w", cerr)
 		}
 	}
+	if q.updateSessionActiveAgentStmt != nil {
+		if cerr := q.updateSessionActiveAgentStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateSessionActiveAgentStmt: %w", cerr)
+		}
+	}
 	return err
 }
 
@@ -401,6 +409,7 @@ type Queries struct {
 	updateMessageStmt              *sql.Stmt
 	updateSessionStmt              *sql.Stmt
 	updateSessionTitleAndUsageStmt *sql.Stmt
+	updateSessionActiveAgentStmt   *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
@@ -444,5 +453,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updateMessageStmt:              q.updateMessageStmt,
 		updateSessionStmt:              q.updateSessionStmt,
 		updateSessionTitleAndUsageStmt: q.updateSessionTitleAndUsageStmt,
+		updateSessionActiveAgentStmt:   q.updateSessionActiveAgentStmt,
 	}
 }

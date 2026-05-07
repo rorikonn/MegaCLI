@@ -172,7 +172,7 @@ megacli --agent coder
 		// Apply --agent flag if specified.
 		agentFlag, _ := cmd.Flags().GetString("agent")
 		if agentFlag != "" {
-			if err := ws.AgentSwitch(cmd.Context(), agentFlag); err != nil {
+			if _, err := ws.AgentSwitch(cmd.Context(), agentFlag); err != nil {
 				return fmt.Errorf("failed to switch to agent %q: %w", agentFlag, err)
 			}
 		}

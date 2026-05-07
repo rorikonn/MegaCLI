@@ -58,6 +58,7 @@ type Session struct {
 	Todos            []Todo
 	CreatedAt        int64
 	UpdatedAt        int64
+	ActiveAgent      string
 
 	// In-memory only fields for detailed token breakdown (not persisted to DB).
 	InputTokens         int64
@@ -78,6 +79,7 @@ type Service interface {
 	UpdateTitleAndUsage(ctx context.Context, sessionID, title string, promptTokens, completionTokens int64, cost float64) error
 	Rename(ctx context.Context, id string, title string) error
 	Delete(ctx context.Context, id string) error
+	UpdateActiveAgent(ctx context.Context, id string, agentName string) error
 
 	// Agent tool session management
 	CreateAgentToolSessionID(messageID, toolCallID string) string
@@ -163,6 +165,13 @@ func (s *service) Delete(ctx context.Context, id string) error {
 	s.Publish(pubsub.DeletedEvent, session)
 	event.SessionDeleted()
 	return nil
+}
+
+func (s *service) UpdateActiveAgent(ctx context.Context, id string, agentName string) error {
+	return s.q.UpdateSessionActiveAgent(ctx, db.UpdateSessionActiveAgentParams{
+		ActiveAgent: agentName,
+		ID:          id,
+	})
 }
 
 func (s *service) Get(ctx context.Context, id string) (Session, error) {
@@ -283,6 +292,7 @@ func (s service) fromDBItem(item db.Session) Session {
 		Todos:            todos,
 		CreatedAt:        item.CreatedAt,
 		UpdatedAt:        item.UpdatedAt,
+		ActiveAgent:      item.ActiveAgent,
 	}
 }
 

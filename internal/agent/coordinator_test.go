@@ -8,6 +8,7 @@ import (
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy"
 	"github.com/megacli/megacli/internal/config"
+	"github.com/megacli/megacli/internal/csync"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,6 +25,7 @@ func (m *mockSessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fan
 }
 
 func (m *mockSessionAgent) Model() Model                        { return m.model }
+func (m *mockSessionAgent) SmallModel() Model                   { return m.model }
 func (m *mockSessionAgent) SetModels(large, small Model)        {}
 func (m *mockSessionAgent) SetTools(tools []fantasy.AgentTool)  {}
 func (m *mockSessionAgent) SetSystemPrompt(systemPrompt string) {}
@@ -46,8 +48,12 @@ func newTestCoordinator(t *testing.T, env fakeEnv, providerID string, providerCf
 	require.NoError(t, err)
 	cfg.Config().Providers.Set(providerID, providerCfg)
 	return &coordinator{
-		cfg:      cfg,
-		sessions: env.sessions,
+		cfg:                 cfg,
+		sessions:            env.sessions,
+		currentAgentName:    csync.NewValue(config.AgentCoder),
+		pendingSwitch:       csync.NewValue(""),
+		currentModelType:    csync.NewValue(config.SelectedModelTypeLarge),
+		currentAllowedTools: csync.NewSlice[string](),
 	}
 }
 

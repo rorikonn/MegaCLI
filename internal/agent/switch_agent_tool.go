@@ -3,10 +3,12 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"charm.land/fantasy"
 
+	"github.com/megacli/megacli/internal/agent/tools"
 	"github.com/megacli/megacli/internal/config"
 )
 
@@ -18,7 +20,7 @@ type SwitchAgentParams struct {
 }
 
 func (c *coordinator) switchAgentToolDesc() string {
-	base := "Switch the active agent. Only primary agents can be switched to. After switching, the current turn ends and the new agent takes over."
+	base := "Switch the active agent. Only primary agents can be switched to. The switch takes effect on the next turn; the current turn continues normally."
 	agents := c.AvailableAgents()
 	if len(agents) <= 1 {
 		return base
@@ -35,11 +37,7 @@ func (c *coordinator) switchAgentToolDesc() string {
 		if desc == "" {
 			desc = agentCfg.Name
 		}
-		current := ""
-		if id == c.currentAgentName {
-			current = " (current)"
-		}
-		fmt.Fprintf(&sb, "- %s: %s%s\n", id, desc, current)
+		fmt.Fprintf(&sb, "- %s: %s\n", id, desc)
 	}
 	sb.WriteString("</available_agents>")
 	return sb.String()
@@ -54,7 +52,7 @@ func (c *coordinator) switchAgentTool() fantasy.AgentTool {
 				return fantasy.NewTextErrorResponse("agent_id is required"), nil
 			}
 
-			if params.AgentID == c.currentAgentName {
+			if params.AgentID == c.currentAgentName.Get() {
 				return fantasy.NewTextResponse(fmt.Sprintf("Already using agent %q.", params.AgentID)), nil
 			}
 
@@ -70,12 +68,25 @@ func (c *coordinator) switchAgentTool() fantasy.AgentTool {
 				), nil
 			}
 
-			if err := c.SwitchAgent(ctx, params.AgentID); err != nil {
+			desc := agentCfg.Description
+			if desc == "" {
+				desc = agentCfg.Name
+			}
+
+			if _, err := c.SwitchAgent(ctx, params.AgentID); err != nil {
 				return fantasy.NewTextErrorResponse(fmt.Sprintf("failed to switch agent: %v", err)), nil
 			}
 
-			resp := fantasy.NewTextResponse(fmt.Sprintf("Switched to agent %q. The new agent is now active.", params.AgentID))
-			resp.StopTurn = true
-			return resp, nil
+			// Persist the active agent to the session DB.
+			if sessionID := tools.GetSessionFromContext(ctx); sessionID != "" {
+				if err := c.sessions.UpdateActiveAgent(ctx, sessionID, params.AgentID); err != nil {
+					slog.Error("Failed to persist active agent to session", "error", err)
+				}
+			}
+
+			return fantasy.NewTextResponse(fmt.Sprintf(
+				"Switched to agent %q (%s). The new agent is now active. Follow the instructions in your system prompt for this agent.",
+				params.AgentID, desc,
+			)), nil
 		})
 }

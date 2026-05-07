@@ -132,12 +132,14 @@ func renderAskUserPanel(sty *styles.Styles, s *askUserState, width int) string {
 	}
 
 	content := strings.Join(inner, "\n")
-	return as.Border.Width(width - 2).Render(content)
+	panelWidth := width - as.Border.GetHorizontalFrameSize()
+	return as.Border.Width(panelWidth).Render(content)
 }
 
 const askUserPlaceholder = "Type custom answer or use ↑↓ to select, Enter to confirm"
 
-// enterAskMode activates ask mode on the UI.
+// enterAskMode activates ask mode on the UI and forces focus to the
+// editor so that digit/arrow shortcuts reach handleAskUserKeyPress.
 func (m *UI) enterAskMode(req askuser.AskUserRequest) {
 	if len(req.Questions) == 0 {
 		return
@@ -145,6 +147,13 @@ func (m *UI) enterAskMode(req askuser.AskUserRequest) {
 	m.askUser = newAskUserState(req, m.textarea.Placeholder)
 	m.textarea.Placeholder = askUserPlaceholder
 	m.textarea.Reset()
+
+	if m.focus != uiFocusEditor {
+		m.focus = uiFocusEditor
+		m.textarea.Focus() //nolint:errcheck
+		m.chat.Blur()
+	}
+
 	m.updateLayoutAndSize()
 }
 

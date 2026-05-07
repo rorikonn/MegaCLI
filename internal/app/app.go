@@ -356,6 +356,13 @@ func (app *App) RunNonInteractive(ctx context.Context, output io.Writer, prompt,
 	// session.
 	app.Permissions.AutoApproveSession(sess.ID)
 
+	if saved := strings.TrimSpace(sess.ActiveAgent); saved != "" {
+		if _, err := app.AgentCoordinator.SwitchAgent(ctx, saved); err != nil {
+			slog.Warn("Could not restore agent from session, using default",
+				"saved_agent", saved, "error", err)
+		}
+	}
+
 	type response struct {
 		result *fantasy.AgentResult
 		err    error

@@ -72,3 +72,9 @@ WHERE id = ?;
 -- name: DeleteSession :exec
 DELETE FROM sessions
 WHERE id = ?;
+
+-- name: UpdateSessionActiveAgent :exec
+UPDATE sessions
+SET
+    active_agent = ?
+WHERE id = ?;

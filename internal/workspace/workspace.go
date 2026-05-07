@@ -145,7 +145,9 @@ type Workspace interface {
 	DisableDockerMCP() error
 
 	// Agent switching
-	AgentSwitch(ctx context.Context, name string) error
+	AgentSwitch(ctx context.Context, name string) (deferred bool, err error)
+	AgentPendingSwitch() string
+	UpdateSessionActiveAgent(ctx context.Context, sessionID, agentName string) error
 	AgentCurrent() string
 	AgentAvailable() []string
 

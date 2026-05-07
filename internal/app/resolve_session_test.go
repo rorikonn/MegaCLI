@@ -72,6 +72,8 @@ func (m *mockSessionService) Delete(context.Context, string) error {
 	return nil
 }
 
+func (m *mockSessionService) UpdateActiveAgent(_ context.Context, _, _ string) error { return nil }
+
 func (m *mockSessionService) CreateAgentToolSessionID(messageID, toolCallID string) string {
 	return fmt.Sprintf("%s$$%s", messageID, toolCallID)
 }

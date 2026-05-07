@@ -229,8 +229,16 @@ func (w *ClientWorkspace) AgentSummarize(ctx context.Context, sessionID string) 
 	return w.client.AgentSummarizeSession(ctx, w.workspaceID(), sessionID)
 }
 
-func (w *ClientWorkspace) AgentSwitch(_ context.Context, _ string) error {
-	return errors.New("agent switching not supported in client mode")
+func (w *ClientWorkspace) AgentSwitch(_ context.Context, _ string) (bool, error) {
+	return false, errors.New("agent switching not supported in client mode")
+}
+
+func (w *ClientWorkspace) AgentPendingSwitch() string {
+	return ""
+}
+
+func (w *ClientWorkspace) UpdateSessionActiveAgent(context.Context, string, string) error {
+	return nil
 }
 
 func (w *ClientWorkspace) AgentCurrent() string {

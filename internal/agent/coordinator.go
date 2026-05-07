@@ -25,6 +25,7 @@ import (
 	"github.com/megacli/megacli/internal/agent/tools"
 	"github.com/megacli/megacli/internal/askuser"
 	"github.com/megacli/megacli/internal/config"
+	"github.com/megacli/megacli/internal/csync"
 	"github.com/megacli/megacli/internal/event"
 	"github.com/megacli/megacli/internal/filetracker"
 	"github.com/megacli/megacli/internal/history"
@@ -82,11 +83,16 @@ type Coordinator interface {
 	SetExtraTools(tools []fantasy.AgentTool)
 
 	// SwitchAgent hot-swaps the current agent's system prompt and tools.
-	// Only primary agents can be switched to.
-	SwitchAgent(ctx context.Context, name string) error
+	// Only primary agents can be switched to. The returned bool indicates
+	// deferred application when true.
+	SwitchAgent(ctx context.Context, name string) (deferred bool, err error)
 
 	// CurrentAgent returns the ID of the active agent.
 	CurrentAgent() string
+
+	// PendingSwitch returns the agent ID of a queued switch, or ""
+	// if no switch is pending.
+	PendingSwitch() string
 
 	// AvailableAgents returns the IDs of all non-disabled primary agents.
 	AvailableAgents() []string
@@ -104,8 +110,26 @@ type coordinator struct {
 	notify      pubsub.Publisher[notify.Notification]
 
 	currentAgent     SessionAgent
-	currentAgentName string
+	currentAgentName *csync.Value[string]
 	agents           map[string]SessionAgent
+
+	// currentModelType tracks which model size the active agent uses
+	// ("large" or "small"). Thread-safe for concurrent reads from
+	// coordinator.Run and writes from SwitchAgent.
+	currentModelType *csync.Value[config.SelectedModelType]
+
+	// currentAllowedTools tracks the active agent's AllowedTools for
+	// runtime tool gating. Empty means all tools are allowed. Uses
+	// csync.Slice for thread safety: gatedTool.Run reads from the
+	// fantasy agent goroutine while SwitchAgent writes from the UI
+	// goroutine.
+	currentAllowedTools *csync.Slice[string]
+
+	// pendingSwitch stores the name of a deferred agent switch.
+	// When the agent is busy, SwitchAgent stores the target name
+	// here instead of applying immediately. It is consumed by
+	// applyPendingSwitch at the start of the next Run.
+	pendingSwitch *csync.Value[string]
 
 	// agentDefs caches the agent configurations from config for runtime
 	// lookups (e.g. SwitchAgent, AvailableAgents).
@@ -153,7 +177,7 @@ func NewCoordinator(
 		notify:           notify,
 		agents:           make(map[string]SessionAgent),
 		agentDefs:        cfg.Config().Agents,
-		currentAgentName: config.AgentCoder,
+		currentAgentName: csync.NewValue(config.AgentCoder),
 		allSkills:        allSkills,
 		activeSkills:     activeSkills,
 		skillTracker:     skillTracker,
@@ -164,12 +188,18 @@ func NewCoordinator(
 		return nil, errCoderAgentNotConfigured
 	}
 
+	c.pendingSwitch = csync.NewValue("")
+	c.currentModelType = csync.NewValue(agentCfg.Model)
+	c.currentAllowedTools = csync.NewSlice[string]()
+	c.currentAllowedTools.SetSlice(agentCfg.AllowedTools)
+
 	p, err := promptForAgent(agentCfg, prompt.WithWorkingDir(c.cfg.WorkingDir()))
 	if err != nil {
 		return nil, err
 	}
 
-	agent, err := c.buildAgent(ctx, p, agentCfg, false)
+	unionAgent := c.primaryToolsUnionAgent()
+	agent, err := c.buildAgent(ctx, p, unionAgent, false)
 	if err != nil {
 		return nil, err
 	}
@@ -178,18 +208,55 @@ func NewCoordinator(
 	return c, nil
 }
 
+// primaryToolsUnionAgent returns a synthetic config.Agent whose
+// AllowedTools is the union of all primary agents' allowed tools.
+// This ensures tool definitions sent to the API never change when
+// switching between primary agents.
+func (c *coordinator) primaryToolsUnionAgent() config.Agent {
+	seen := make(map[string]bool)
+	var union []string
+	for _, a := range c.agentDefs {
+		if a.EffectiveRole() != config.AgentRolePrimary || a.Disabled {
+			continue
+		}
+		for _, t := range a.AllowedTools {
+			if !seen[t] {
+				seen[t] = true
+				union = append(union, t)
+			}
+		}
+	}
+	slices.Sort(union)
+	base := c.agentDefs[config.AgentCoder]
+	base.AllowedTools = union
+	base.AllowedMCP = nil
+	return base
+}
+
+// activeModel returns the model that matches the current agent's
+// configured model type (large or small).
+func (c *coordinator) activeModel() Model {
+	if c.currentModelType.Get() == config.SelectedModelTypeSmall {
+		return c.currentAgent.SmallModel()
+	}
+	return c.currentAgent.Model()
+}
+
 // Run implements Coordinator.
 func (c *coordinator) Run(ctx context.Context, sessionID string, prompt string, attachments ...message.Attachment) (*fantasy.AgentResult, error) {
 	if err := c.readyWg.Wait(); err != nil {
 		return nil, err
 	}
 
+	// Apply any deferred agent switch before refreshing models.
+	c.applyPendingSwitch(ctx, sessionID)
+
 	// refresh models before each run
 	if err := c.UpdateModels(ctx); err != nil {
 		return nil, fmt.Errorf("failed to update models: %w", err)
 	}
 
-	model := c.currentAgent.Model()
+	model := c.activeModel()
 	maxTokens := model.CatwalkCfg.DefaultMaxTokens
 	if model.ModelCfg.MaxTokens != 0 {
 		maxTokens = model.ModelCfg.MaxTokens
@@ -222,6 +289,7 @@ func (c *coordinator) Run(ctx context.Context, sessionID string, prompt string, 
 		}
 	}
 
+	modelType := c.currentModelType.Get()
 	run := func() (*fantasy.AgentResult, error) {
 		return c.currentAgent.Run(ctx, SessionAgentCall{
 			SessionID:        sessionID,
@@ -234,6 +302,7 @@ func (c *coordinator) Run(ctx context.Context, sessionID string, prompt string, 
 			TopK:             topK,
 			FrequencyPenalty: freqPenalty,
 			PresencePenalty:  presPenalty,
+			ModelType:        modelType,
 		})
 	}
 	beforeLoaded := c.skillTracker.LoadedNames()
@@ -599,7 +668,31 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubA
 	// itself is still wrapped from the coder's side.
 	filteredTools = wrapToolsWithHooks(filteredTools, hookRunner, isSubAgent)
 
+	if !isSubAgent {
+		filteredTools = c.wrapToolsWithGating(filteredTools)
+	}
+
 	return filteredTools, nil
+}
+
+// wrapToolsWithGating wraps each tool with a gatedTool that captures
+// a snapshot of the current allowed tools. This means mid-turn agent
+// switches do not affect in-flight tool calls; the new gating only
+// takes effect when tools are rebuilt on the next turn (via
+// UpdateModels).
+func (c *coordinator) wrapToolsWithGating(tools []fantasy.AgentTool) []fantasy.AgentTool {
+	snapshot := c.currentAllowedTools.Copy()
+	var allowedFn AllowedToolsFunc
+	if len(snapshot) > 0 {
+		allowedFn = func() []string { return snapshot }
+	} else {
+		allowedFn = func() []string { return nil }
+	}
+	out := make([]fantasy.AgentTool, len(tools))
+	for i, tool := range tools {
+		out[i] = newGatedTool(tool, allowedFn)
+	}
+	return out
 }
 
 // TODO: when we support multiple agents we need to change this so that we pass in the agent specific model config
@@ -961,7 +1054,7 @@ func (c *coordinator) IsSessionBusy(sessionID string) bool {
 }
 
 func (c *coordinator) Model() Model {
-	return c.currentAgent.Model()
+	return c.activeModel()
 }
 
 func (c *coordinator) UpdateModels(ctx context.Context) error {
@@ -970,13 +1063,8 @@ func (c *coordinator) UpdateModels(ctx context.Context) error {
 		return err
 	}
 	c.currentAgent.SetModels(large, small)
-
-	agentCfg, ok := c.agentDefs[c.currentAgentName]
-	if !ok {
-		return fmt.Errorf("agent %q not found in config", c.currentAgentName)
-	}
-
-	tools, err := c.buildTools(ctx, agentCfg, false)
+	unionAgent := c.primaryToolsUnionAgent()
+	tools, err := c.buildTools(ctx, unionAgent, false)
 	if err != nil {
 		return err
 	}
@@ -988,22 +1076,42 @@ func (c *coordinator) SetExtraTools(tools []fantasy.AgentTool) {
 	c.extraTools = tools
 }
 
-// SwitchAgent hot-swaps the current agent's system prompt and tools
-// to those defined by the named agent. Only primary agents are allowed.
-func (c *coordinator) SwitchAgent(ctx context.Context, name string) error {
-	if name == c.currentAgentName {
-		return nil
+// SwitchAgent switches to the named agent. If the agent is currently
+// busy, the switch is deferred until the next Run and deferred=true
+// is returned. Validation (exists, primary, not disabled) always
+// happens immediately so errors are reported right away.
+func (c *coordinator) SwitchAgent(ctx context.Context, name string) (bool, error) {
+	if name == c.currentAgentName.Get() {
+		return false, nil
 	}
 
+	// Validate eagerly regardless of busy state.
+	agentCfg, ok := c.agentDefs[name]
+	if !ok {
+		return false, fmt.Errorf("agent %q not found", name)
+	}
+	if agentCfg.EffectiveRole() != config.AgentRolePrimary {
+		return false, fmt.Errorf("agent %q is a subagent and cannot be switched to directly", name)
+	}
+	if agentCfg.Disabled {
+		return false, fmt.Errorf("agent %q is disabled", name)
+	}
+
+	if c.currentAgent.IsBusy() {
+		c.pendingSwitch.Set(name)
+		slog.Info("Agent busy, switch deferred", "target", name)
+		return true, nil
+	}
+
+	return false, c.applySwitchAgent(ctx, name)
+}
+
+// applySwitchAgent performs the actual agent switch: rebuilds the
+// system prompt and updates tool gating + model type.
+func (c *coordinator) applySwitchAgent(ctx context.Context, name string) error {
 	agentCfg, ok := c.agentDefs[name]
 	if !ok {
 		return fmt.Errorf("agent %q not found", name)
-	}
-	if agentCfg.EffectiveRole() != config.AgentRolePrimary {
-		return fmt.Errorf("agent %q is a subagent and cannot be switched to directly", name)
-	}
-	if agentCfg.Disabled {
-		return fmt.Errorf("agent %q is disabled", name)
 	}
 
 	p, err := promptForAgent(agentCfg, prompt.WithWorkingDir(c.cfg.WorkingDir()))
@@ -1024,20 +1132,42 @@ func (c *coordinator) SwitchAgent(ctx context.Context, name string) error {
 	}
 	c.currentAgent.SetSystemPrompt(built)
 
-	tools, err := c.buildTools(ctx, agentCfg, false)
-	if err != nil {
-		return fmt.Errorf("building tools for agent %q: %w", name, err)
-	}
-	c.currentAgent.SetTools(tools)
+	c.currentAllowedTools.SetSlice(agentCfg.AllowedTools)
+	c.currentModelType.Set(agentCfg.Model)
 
-	c.currentAgentName = name
+	c.currentAgentName.Set(name)
 	slog.Info("Switched agent", "agent", name)
 	return nil
 }
 
+// applyPendingSwitch consumes any deferred agent switch. Called at
+// the start of coordinator.Run before UpdateModels.
+func (c *coordinator) applyPendingSwitch(ctx context.Context, sessionID string) {
+	name := c.pendingSwitch.Get()
+	if name == "" {
+		return
+	}
+	c.pendingSwitch.Set("")
+	if err := c.applySwitchAgent(ctx, name); err != nil {
+		slog.Error("Failed to apply deferred agent switch", "target", name, "error", err)
+		return
+	}
+	if sessionID != "" {
+		if err := c.sessions.UpdateActiveAgent(ctx, sessionID, name); err != nil {
+			slog.Error("Failed to persist deferred agent switch", "error", err)
+		}
+	}
+}
+
+// PendingSwitch returns the agent ID of a queued switch, or empty
+// string if no switch is pending.
+func (c *coordinator) PendingSwitch() string {
+	return c.pendingSwitch.Get()
+}
+
 // CurrentAgent returns the ID of the active agent.
 func (c *coordinator) CurrentAgent() string {
-	return c.currentAgentName
+	return c.currentAgentName.Get()
 }
 
 // AvailableAgents returns IDs of all non-disabled primary agents.
@@ -1062,11 +1192,12 @@ func (c *coordinator) QueuedPromptsList(sessionID string) []string {
 }
 
 func (c *coordinator) Summarize(ctx context.Context, sessionID string) error {
-	providerCfg, ok := c.cfg.Config().Providers.Get(c.currentAgent.Model().ModelCfg.Provider)
+	model := c.activeModel()
+	providerCfg, ok := c.cfg.Config().Providers.Get(model.ModelCfg.Provider)
 	if !ok {
 		return errModelProviderNotConfigured
 	}
-	return c.currentAgent.Summarize(ctx, sessionID, getProviderOptions(c.currentAgent.Model(), providerCfg))
+	return c.currentAgent.Summarize(ctx, sessionID, getProviderOptions(model, providerCfg))
 }
 
 func (c *coordinator) isUnauthorized(err error) bool {

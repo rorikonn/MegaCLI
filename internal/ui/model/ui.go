@@ -593,6 +593,15 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.historyReset()
 		cmds = append(cmds, m.loadPromptHistory())
 		m.updateLayoutAndSize()
+		if saved := strings.TrimSpace(m.session.ActiveAgent); saved != "" {
+			if _, err := m.com.Workspace.AgentSwitch(context.Background(), saved); err != nil {
+				slog.Warn("Could not restore agent from session, using default",
+					"saved_agent", saved, "error", err)
+				cmds = append(cmds, util.ReportWarn(
+					fmt.Sprintf("Session agent %q no longer available, using %q",
+						saved, m.com.Workspace.AgentCurrent())))
+			}
+		}
 
 	case sessionFilesUpdatesMsg:
 		m.sessionFiles = msg.sessionFiles
@@ -1446,13 +1455,30 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 			cmds = append(cmds, cmd)
 		}
 
-	// Agent switch message.
+	// Agent switch message. When the agent is busy the switch is
+	// deferred: the coordinator queues it and applies at the start
+	// of the next Run. The UI shows the pending state in the agent
+	// indicator.
 	case dialog.ActionSwitchAgent:
 		m.dialog.CloseDialog(dialog.AgentsID)
 		m.dialog.CloseDialog(dialog.CommandsID)
+		sessionID := ""
+		if m.session != nil {
+			sessionID = m.session.ID
+		}
 		cmds = append(cmds, func() tea.Msg {
-			if err := m.com.Workspace.AgentSwitch(context.Background(), msg.AgentID); err != nil {
+			ctx := context.Background()
+			deferred, err := m.com.Workspace.AgentSwitch(ctx, msg.AgentID)
+			if err != nil {
 				return util.ReportError(err)()
+			}
+			if deferred {
+				return util.NewInfoMsg("Agent will switch to " + msg.AgentID + " after current task completes")
+			}
+			if sessionID != "" {
+				if err := m.com.Workspace.UpdateSessionActiveAgent(ctx, sessionID, msg.AgentID); err != nil {
+					slog.Error("Failed to persist active agent to session", "error", err)
+				}
 			}
 			return util.NewInfoMsg("Switched to agent: " + msg.AgentID)
 		})
@@ -1661,7 +1687,7 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 			var seqCmds []tea.Cmd
 			if agentName != "" {
 				seqCmds = append(seqCmds, func() tea.Msg {
-					if err := m.com.Workspace.AgentSwitch(context.Background(), agentName); err != nil {
+					if _, err := m.com.Workspace.AgentSwitch(context.Background(), agentName); err != nil {
 						slog.Warn("Command agent switch failed", "agent", agentName, "error", err)
 					}
 					return nil
@@ -3293,12 +3319,12 @@ func (m *UI) editorContentOffset() int {
 func (m *UI) renderEditorView(width int) string {
 	var parts []string
 
-	if line := m.editorAgentIndicator(width); line != "" {
-		parts = append(parts, line)
-	}
-
 	if m.askUser != nil {
 		parts = append(parts, renderAskUserPanel(m.com.Styles, m.askUser, width))
+	}
+
+	if line := m.editorAgentIndicator(width); line != "" {
+		parts = append(parts, line)
 	}
 
 	if len(m.attachments.List()) > 0 {
@@ -3327,10 +3353,24 @@ func (m *UI) editorAgentIndicator(width int) string {
 
 	if m.agentIsSpinning {
 		spinnerView := m.agentSpinner.View()
-		name := t.Sidebar.AgentName.Render(displayName)
+		nameView := t.Sidebar.AgentName.Render(displayName)
+		// Show pending switch target when a deferred switch is queued.
+		if pending := m.com.Workspace.AgentPendingSwitch(); pending != "" {
+			pendingCfg, pOK := m.com.Config().Agents[pending]
+			pendingName := pending
+			if pOK && pendingCfg.Name != "" {
+				pendingName = pendingCfg.Name
+			}
+			arrow := lipgloss.NewStyle().Faint(true).Render(styles.ArrowRightIcon)
+			target := t.Sidebar.AgentName.Render(pendingName)
+			activity := lipgloss.NewStyle().Faint(true).Render(m.agentActivity)
+			return lipgloss.NewStyle().Width(width).Render(
+				fmt.Sprintf("%s%s %s %s %s %s", indent, spinnerView, nameView, arrow, target, activity),
+			)
+		}
 		activity := lipgloss.NewStyle().Faint(true).Render(m.agentActivity)
 		return lipgloss.NewStyle().Width(width).Render(
-			fmt.Sprintf("%s%s %s %s", indent, spinnerView, name, activity),
+			fmt.Sprintf("%s%s %s %s", indent, spinnerView, nameView, activity),
 		)
 	}
 
