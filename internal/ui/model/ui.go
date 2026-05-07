@@ -713,7 +713,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 		if cmd := m.sendNotification(notification.Notification{
-			Title:   "Crush is waiting...",
+			Title:   "MegaCLI is waiting...",
 			Message: fmt.Sprintf("Permission required to execute \"%s\"", msg.Payload.ToolName),
 		}); cmd != nil {
 			cmds = append(cmds, cmd)
@@ -3229,6 +3229,7 @@ var placeholders = [...]string{
 	"Talk nerdy to me",
 	"Insert brilliant idea here",
 	"Press enter to send, or keep typing",
+	"mihoyo is my daddy",
 }
 
 // randomizePlaceholders selects a random placeholder text for the textarea.
@@ -3314,7 +3315,7 @@ func (m *UI) editorAgentIndicator(width int) string {
 	name := t.Sidebar.AgentName.Render(displayName)
 	status := "Ready!"
 	if m.com.Workspace.PermissionSkipRequests() {
-		status = "Ready! You only live once~"
+		status = "Ready to rm -rf!"
 	}
 	statusView := lipgloss.NewStyle().Faint(true).Render(status)
 	return lipgloss.NewStyle().Width(width).Render(
@@ -3712,7 +3713,7 @@ func (m *UI) handleAgentNotification(n notify.Notification) tea.Cmd {
 	case notify.TypeAgentFinished:
 		var cmds []tea.Cmd
 		cmds = append(cmds, m.sendNotification(notification.Notification{
-			Title:   "Crush is waiting...",
+			Title:   "MegaCLI is waiting...",
 			Message: fmt.Sprintf("Agent's turn completed in \"%s\"", n.SessionTitle),
 		}))
 		if m.com.IsHyper() {

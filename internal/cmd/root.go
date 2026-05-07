@@ -50,9 +50,9 @@ var clientHost string
 
 func init() {
 	rootCmd.PersistentFlags().StringP("cwd", "c", "", "Current working directory")
-	rootCmd.PersistentFlags().StringP("data-dir", "D", "", "Custom crush data directory")
+	rootCmd.PersistentFlags().StringP("data-dir", "D", "", "Custom data directory")
 	rootCmd.PersistentFlags().BoolP("debug", "d", false, "Debug")
-	rootCmd.PersistentFlags().StringVarP(&clientHost, "host", "H", server.DefaultHost(), "Connect to a specific crush server host (for advanced users)")
+	rootCmd.PersistentFlags().StringVarP(&clientHost, "host", "H", server.DefaultHost(), "Connect to a specific server host (for advanced users)")
 	rootCmd.Flags().BoolP("help", "h", false, "Help")
 	rootCmd.Flags().BoolP("yolo", "y", false, "Automatically accept all permissions (dangerous mode)")
 	rootCmd.Flags().StringP("session", "s", "", "Continue a previous session by ID")
@@ -82,28 +82,31 @@ var rootCmd = &cobra.Command{
 	Long:  "A glamorous, terminal-first AI assistant for software development and adjacent tasks",
 	Example: `
 # Run in interactive mode
-crush
+megacli
 
 # Run non-interactively
-crush run "Guess my 5 favorite Pokémon"
+megacli run "Guess my 5 favorite Pokémon"
 
-# Run a non-interactively with pipes and redirection
-cat README.md | crush run "make this more glamorous" > GLAMOROUS_README.md
+# Run non-interactively with pipes and redirection
+cat README.md | megacli run "make this more glamorous" > GLAMOROUS_README.md
 
 # Run with debug logging in a specific directory
-crush --debug --cwd /path/to/project
+megacli --debug --cwd /path/to/project
 
 # Run in yolo mode (auto-accept all permissions; use with care)
-crush --yolo
+megacli --yolo
 
 # Run with custom data directory
-crush --data-dir /path/to/custom/.crush
+megacli --data-dir /path/to/custom/.crush
 
 # Continue a previous session
-crush --session {session-id}
+megacli --session {session-id}
 
 # Continue the most recent session
-crush --continue
+megacli --continue
+
+# Start with a specific agent
+megacli --agent coder
   `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionID, _ := cmd.Flags().GetString("session")
@@ -191,7 +194,7 @@ crush --continue
 		if _, err := program.Run(); err != nil {
 			event.Error(err)
 			slog.Error("TUI run error", "error", err)
-			return errors.New("Crush crashed. If metrics are enabled, we were notified about it. If you'd like to report it, please copy the stacktrace above and open an issue at https://github.com/megacli/megacli/issues/new?template=bug.yml") //nolint:staticcheck
+			return errors.New("MegaCLI crashed. Please copy the stacktrace above and open an issue at https://github.com/megacli/megacli/issues/new?template=bug.yml") //nolint:staticcheck
 		}
 		return nil
 	},
@@ -480,7 +483,7 @@ func ensureServer(cmd *cobra.Command, hostURL *url.URL) error {
 			}
 		}
 		if err != nil {
-			return fmt.Errorf("failed to initialize crush server: %v", err)
+			return fmt.Errorf("failed to initialize megacli server: %v", err)
 		}
 	}
 
@@ -562,11 +565,11 @@ func startDetachedServer(cmd *cobra.Command) error {
 	c.Stderr = stderr
 
 	if err := c.Start(); err != nil {
-		return fmt.Errorf("failed to start crush server: %v", err)
+		return fmt.Errorf("failed to start megacli server: %v", err)
 	}
 
 	if err := c.Process.Release(); err != nil {
-		return fmt.Errorf("failed to detach crush server process: %v", err)
+		return fmt.Errorf("failed to detach megacli server process: %v", err)
 	}
 
 	return nil
