@@ -78,6 +78,8 @@ clean version like `0.4.0` and auto-update is **enabled**.
   (`.github/workflows/megacli-release.yml`)
 - If there are uncommitted changes, commit them first **without asking the
   user**. Use an appropriate semantic commit message based on the changes.
+- **ALL local commits on the branch must be pushed to remote before tagging.
+  Unpushed commits will not be included in the release build.**
 
 ### 1. Pre-flight Checks
 
@@ -120,14 +122,33 @@ Include: *.go,*.yml,*.yaml,*.json
 
 If any real credentials are found, **STOP** and alert the user.
 
-### 4. Tag and Push
+### 4. Push Local Code (if not already pushed)
+
+**CRITICAL**: Before tagging, ensure the branch has no unpushed commits.
+The release tag points to HEAD — any unpushed commits will be missing from
+CI and the release binary.
+
+```bash
+git log origin/master..HEAD --oneline
+```
+
+If the above outputs any commits, push the branch first:
+
+```bash
+git push origin master
+```
+
+### 5. Tag and Push
 
 ```bash
 git tag -a vX.Y.Z -m "Release vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-### 5. Verify Release
+**Always push the tag AND the branch together.** The tag alone does not push
+your code — it only marks a commit that must already be on the remote.
+
+### 6. Verify Release
 
 After pushing the tag, GitHub Actions will:
 1. Check out the code
@@ -168,6 +189,9 @@ curl -sSf https://raw.githubusercontent.com/rorikonn/MegaCLI/master/scripts/inst
 ## Troubleshooting
 
 - **Workflow not triggered**: Ensure the tag matches `v*.*.*` pattern
+- **Release binary has old code**: The branch wasn't pushed before tagging.
+  Fix by pushing the branch, deleting the remote tag, re-tagging at the new
+  HEAD, and pushing again.
 - **Build fails**: Check Go version in `go.mod` matches the workflow
 - **Binary not found in release**: Check `.goreleaser.release.yml` archive
   names
