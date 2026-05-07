@@ -118,17 +118,12 @@ func Apply(ctx context.Context, version string) (string, error) {
 	return release.Version(), nil
 }
 
+// osLabel returns the lowercase OS name matching the lowercased asset
+// names produced by goreleaser's {{title .Os}} template.
+// go-selfupdate lowercases asset names before suffix matching, so the
+// suffix must also be lowercase.
 func osLabel() string {
-	switch runtime.GOOS {
-	case "linux":
-		return "Linux"
-	case "darwin":
-		return "Darwin"
-	case "windows":
-		return "Windows"
-	default:
-		return runtime.GOOS
-	}
+	return runtime.GOOS
 }
 
 func archLabel() string {
