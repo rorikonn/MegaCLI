@@ -501,6 +501,32 @@ func (app *App) overrideModelsForNonInteractive(ctx context.Context, largeModel,
 	return app.AgentCoordinator.UpdateModels(ctx)
 }
 
+// SetModelByString resolves a model string (e.g. "anthropic/claude-sonnet-4-5"
+// or "gpt-4o") and sets it as the active large model. The agent is rebuilt
+// to use the new model immediately.
+func (app *App) SetModelByString(ctx context.Context, modelStr string) error {
+	providers := app.config.Config().Providers.Copy()
+
+	matches, _, err := findModels(providers, modelStr, "")
+	if err != nil {
+		return err
+	}
+	found, err := validateMatches(matches, modelStr, "command")
+	if err != nil {
+		return err
+	}
+
+	app.config.Config().Models[config.SelectedModelTypeLarge] = config.SelectedModel{
+		Provider: found.provider,
+		Model:    found.modelID,
+	}
+
+	smallCfg := app.GetDefaultSmallModel(found.provider)
+	app.config.Config().Models[config.SelectedModelTypeSmall] = smallCfg
+
+	return app.AgentCoordinator.UpdateModels(ctx)
+}
+
 // GetDefaultSmallModel returns the default small model for the given
 // provider. Falls back to the large model if no default is found.
 func (app *App) GetDefaultSmallModel(providerID string) config.SelectedModel {

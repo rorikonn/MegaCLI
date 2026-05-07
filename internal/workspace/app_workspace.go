@@ -176,6 +176,10 @@ func (w *AppWorkspace) AgentAvailable() []string {
 	return w.app.AgentCoordinator.AvailableAgents()
 }
 
+func (w *AppWorkspace) SetModelByString(ctx context.Context, modelStr string) error {
+	return w.app.SetModelByString(ctx, modelStr)
+}
+
 func (w *AppWorkspace) UpdateAgentModel(ctx context.Context) error {
 	return w.app.UpdateAgentModel(ctx)
 }

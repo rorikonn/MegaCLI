@@ -861,6 +861,7 @@ func GlobalSkillsDirs() []string {
 	paths := []string{
 		filepath.Join(home.Config(), appName, "skills"),
 		filepath.Join(home.Config(), "agents", "skills"),
+		filepath.Join(home.Config(), "opencode", "skills"),
 	}
 
 	// On Windows, also load from app data on top of `$HOME/.config/crush`.
@@ -880,14 +881,15 @@ func GlobalSkillsDirs() []string {
 	return paths
 }
 
-// ProjectSkillsDir returns the default project directories for which Crush
-// will look for skills.
+// ProjectSkillsDir returns the default project directories for which
+// MegaCLI will look for skills.
 func ProjectSkillsDir(workingDir string) []string {
 	return []string{
 		filepath.Join(workingDir, ".agents/skills"),
 		filepath.Join(workingDir, ".megacli/skills"),
 		filepath.Join(workingDir, ".claude/skills"),
 		filepath.Join(workingDir, ".cursor/skills"),
+		filepath.Join(workingDir, ".opencode/skills"),
 	}
 }
 

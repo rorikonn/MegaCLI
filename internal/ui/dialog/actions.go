@@ -68,9 +68,12 @@ type (
 	}
 	// ActionRunCustomCommand is a message to run a custom command.
 	ActionRunCustomCommand struct {
-		Content   string
-		Arguments []commands.Argument
-		Args      map[string]string // Actual argument values
+		Content     string
+		Description string
+		Agent       string
+		Model       string
+		Arguments   []commands.Argument
+		Args        map[string]string // Actual argument values
 	}
 	// ActionRunMCPPrompt is a message to run a custom command.
 	ActionRunMCPPrompt struct {

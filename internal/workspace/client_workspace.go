@@ -241,6 +241,10 @@ func (w *ClientWorkspace) AgentAvailable() []string {
 	return []string{"coder"}
 }
 
+func (w *ClientWorkspace) SetModelByString(_ context.Context, _ string) error {
+	return errors.New("model override not supported in client mode")
+}
+
 func (w *ClientWorkspace) UpdateAgentModel(ctx context.Context) error {
 	return w.client.UpdateAgent(ctx, w.workspaceID())
 }

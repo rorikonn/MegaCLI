@@ -149,6 +149,9 @@ type Workspace interface {
 	AgentCurrent() string
 	AgentAvailable() []string
 
+	// Model override by string (e.g. "anthropic/claude-sonnet-4-5")
+	SetModelByString(ctx context.Context, modelStr string) error
+
 	// MegaCli extensions
 	GetOrchestrator() *orchestrator.Orchestrator
 	GetIPCManager() *ipc.Manager

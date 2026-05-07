@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/megacli/megacli/internal/agent/tools/mcp"
 	"github.com/megacli/megacli/internal/config"
 	"github.com/megacli/megacli/internal/home"
@@ -39,12 +41,24 @@ type MCPPrompt struct {
 	Arguments   []Argument
 }
 
-// CustomCommand represents a user-defined custom command loaded from markdown files.
+// CustomCommand represents a user-defined custom command loaded from
+// markdown files. Supports optional YAML frontmatter for metadata
+// (compatible with OpenCode command format).
 type CustomCommand struct {
-	ID        string
-	Name      string
-	Content   string
-	Arguments []Argument
+	ID          string
+	Name        string
+	Description string
+	Agent       string
+	Model       string
+	Content     string
+	Arguments   []Argument
+}
+
+// commandFrontmatter holds fields parsed from optional YAML frontmatter.
+type commandFrontmatter struct {
+	Description string `yaml:"description"`
+	Agent       string `yaml:"agent"`
+	Model       string `yaml:"model"`
 }
 
 type commandSource struct {
@@ -97,11 +111,19 @@ func buildCommandSources(cfg *config.Config) []commandSource {
 			prefix: userCommandPrefix,
 		},
 		{
+			path:   filepath.Join(home.Config(), "opencode", "commands"),
+			prefix: userCommandPrefix,
+		},
+		{
 			path:   filepath.Join(home.Dir(), ".megacli", "commands"),
 			prefix: userCommandPrefix,
 		},
 		{
 			path:   filepath.Join(cfg.Options.DataDirectory, "commands"),
+			prefix: projectCommandPrefix,
+		},
+		{
+			path:   filepath.Join(".opencode", "commands"),
 			prefix: projectCommandPrefix,
 		},
 	}
@@ -144,19 +166,61 @@ func loadFromSource(source commandSource) ([]CustomCommand, error) {
 }
 
 func loadCommand(path, baseDir, prefix string) (CustomCommand, error) {
-	content, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		return CustomCommand{}, err
 	}
 
 	id := buildCommandID(path, baseDir, prefix)
+	content := string(raw)
+	var fm commandFrontmatter
+
+	if body, parsed, ok := parseFrontmatter(content); ok {
+		fm = parsed
+		content = body
+	}
 
 	return CustomCommand{
-		ID:        id,
-		Name:      id,
-		Content:   string(content),
-		Arguments: extractArgNames(string(content)),
+		ID:          id,
+		Name:        id,
+		Description: fm.Description,
+		Agent:       fm.Agent,
+		Model:       fm.Model,
+		Content:     content,
+		Arguments:   extractArgNames(content),
 	}, nil
+}
+
+// parseFrontmatter extracts YAML frontmatter from markdown content.
+// Returns the body (everything after frontmatter), parsed metadata,
+// and whether frontmatter was found.
+func parseFrontmatter(content string) (body string, fm commandFrontmatter, ok bool) {
+	content = strings.TrimPrefix(content, "\uFEFF")
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	content = strings.ReplaceAll(content, "\r", "\n")
+
+	trimmed := strings.TrimSpace(content)
+	if !strings.HasPrefix(trimmed, "---") {
+		return "", fm, false
+	}
+
+	// Find the opening delimiter in the original content.
+	startIdx := strings.Index(content, "---")
+	rest := content[startIdx+3:]
+
+	endIdx := strings.Index(rest, "\n---")
+	if endIdx == -1 {
+		return "", fm, false
+	}
+
+	fmText := rest[:endIdx]
+	body = strings.TrimSpace(rest[endIdx+4:])
+
+	if err := yaml.Unmarshal([]byte(fmText), &fm); err != nil {
+		return "", fm, false
+	}
+
+	return body, fm, true
 }
 
 func extractArgNames(content string) []Argument {

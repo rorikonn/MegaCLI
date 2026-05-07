@@ -1645,7 +1645,7 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 			argsDialog := dialog.NewArguments(
 				m.com,
 				"Custom Command Arguments",
-				"",
+				msg.Description,
 				msg.Arguments,
 				msg, // Pass the action as the result
 			)
@@ -1656,7 +1656,30 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		if msg.Args != nil {
 			content = substituteArgs(content, msg.Args)
 		}
-		cmds = append(cmds, m.sendMessage(content))
+		if msg.Agent != "" || msg.Model != "" {
+			agentName, modelStr := msg.Agent, msg.Model
+			var seqCmds []tea.Cmd
+			if agentName != "" {
+				seqCmds = append(seqCmds, func() tea.Msg {
+					if err := m.com.Workspace.AgentSwitch(context.Background(), agentName); err != nil {
+						slog.Warn("Command agent switch failed", "agent", agentName, "error", err)
+					}
+					return nil
+				})
+			}
+			if modelStr != "" {
+				seqCmds = append(seqCmds, func() tea.Msg {
+					if err := m.com.Workspace.SetModelByString(context.Background(), modelStr); err != nil {
+						slog.Warn("Command model override failed", "model", modelStr, "error", err)
+					}
+					return nil
+				})
+			}
+			seqCmds = append(seqCmds, m.sendMessage(content))
+			cmds = append(cmds, tea.Sequence(seqCmds...))
+		} else {
+			cmds = append(cmds, m.sendMessage(content))
+		}
 		m.dialog.CloseFrontDialog()
 	case dialog.ActionRunMCPPrompt:
 		if len(msg.Arguments) > 0 && msg.Args == nil {
