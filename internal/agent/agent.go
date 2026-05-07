@@ -459,7 +459,7 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 				if cw == 0 {
 					return false
 				}
-				tokens := currentSession.CompletionTokens + currentSession.PromptTokens
+				tokens := currentSession.PromptTokens
 				remaining := cw - tokens
 				var threshold int64
 				if cw > largeContextWindowThreshold {
@@ -1069,7 +1069,7 @@ func (a *sessionAgent) generateTitle(ctx context.Context, sessionID string, user
 		cost = *openrouterCost
 	}
 
-	promptTokens := resp.TotalUsage.InputTokens + resp.TotalUsage.CacheCreationTokens
+	promptTokens := resp.TotalUsage.InputTokens + resp.TotalUsage.CacheReadTokens + resp.TotalUsage.CacheCreationTokens
 	completionTokens := resp.TotalUsage.OutputTokens
 
 	// Atomically update only title and usage fields to avoid overriding other
@@ -1110,7 +1110,7 @@ func (a *sessionAgent) updateSessionUsage(model Model, session *session.Session,
 	}
 
 	session.CompletionTokens = usage.OutputTokens
-	session.PromptTokens = usage.InputTokens + usage.CacheReadTokens
+	session.PromptTokens = usage.InputTokens + usage.CacheReadTokens + usage.CacheCreationTokens
 
 	accum, _ := a.tokenAccum.Get(session.ID)
 	accum.InputTokens += usage.InputTokens
