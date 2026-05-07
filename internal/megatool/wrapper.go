@@ -55,8 +55,9 @@ func (w *wrappedMegaTool) Run(ctx context.Context, call fantasy.ToolCall) (fanta
 
 	if w.inner.Mode() == ModeDisplayOnly {
 		meta := DisplayMetadata{
-			ToolName: w.inner.Info().Name,
-			Content:  fullResult.Content,
+			ToolName:      w.inner.Info().Name,
+			Content:       fullResult.Content,
+			InnerMetadata: fullResult.Metadata,
 		}
 		if b, err := json.Marshal(meta); err == nil {
 			resp.Metadata = string(b)

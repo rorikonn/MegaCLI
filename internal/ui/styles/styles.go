@@ -123,6 +123,9 @@ type Styles struct {
 		PromptYoloIconBlurred lipgloss.Style
 		PromptYoloDotsFocused lipgloss.Style
 		PromptYoloDotsBlurred lipgloss.Style
+
+		// Agent indicator hint ("ctrl+a" label above the input).
+		AgentHint lipgloss.Style
 	}
 
 	// Radio
@@ -358,6 +361,11 @@ type Styles struct {
 		ResultTruncation lipgloss.Style // "… and N more" truncation line
 		ResultItemName   lipgloss.Style // Item name (left column in result lists)
 		ResultItemDesc   lipgloss.Style // Item description (right column)
+
+		// ShowFile bordered display styles.
+		ShowFileBorder    lipgloss.Style // Left+top+bottom border (no right).
+		ShowFileTitle     lipgloss.Style // File name in the top border line.
+		ShowFileCollapsed lipgloss.Style // Collapsed range hint ("… N lines …").
 	}
 
 	// Dialog styles

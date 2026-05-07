@@ -1841,6 +1841,11 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 				cmds = append(cmds, cmd)
 			}
 			return true
+		case key.Matches(msg, m.keyMap.Agents):
+			if cmd := m.openAgentsDialog(); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+			return true
 		case key.Matches(msg, m.keyMap.Dashboard):
 			m.showDashboard = !m.showDashboard
 			m.updateLayoutAndSize()
@@ -2482,6 +2487,7 @@ func (m *UI) FullHelp() [][]key.Binding {
 			commands,
 			k.Models,
 			k.Sessions,
+			k.Agents,
 		)
 		if hasSession {
 			mainBinds = append(mainBinds, k.Chat.NewSession)
@@ -2695,8 +2701,9 @@ func (m *UI) generateLayout(w, h int) uiLayout {
 
 	// The help height
 	helpHeight := 1
-	// The editor height: textarea height + margin for attachments and bottom spacing.
-	editorHeight := m.textarea.Height() + editorHeightMargin
+	// The editor height: textarea height + margin for attachments, agent
+	// indicator, and bottom spacing.
+	editorHeight := m.textarea.Height() + m.editorMargin()
 	// The sidebar width
 	sidebarWidth := 38
 	// The header height
@@ -3177,17 +3184,50 @@ func (m *UI) randomizePlaceholders() {
 	m.readyPlaceholder = readyPlaceholders[rand.Intn(len(readyPlaceholders))]
 }
 
+// editorMargin returns the vertical margin for the editor area, accounting
+// for the agent indicator, attachments row, and bottom spacing.
+func (m *UI) editorMargin() int {
+	margin := editorHeightMargin
+	if m.com.Workspace.AgentCurrent() != "" {
+		margin++
+	}
+	return margin
+}
+
 // renderEditorView renders the editor view with attachments if any.
 func (m *UI) renderEditorView(width int) string {
-	var attachmentsView string
-	if len(m.attachments.List()) > 0 {
-		attachmentsView = m.attachments.Render(width)
+	var parts []string
+
+	if line := m.editorAgentIndicator(width); line != "" {
+		parts = append(parts, line)
 	}
-	return strings.Join([]string{
-		attachmentsView,
-		m.textarea.View(),
-		"", // margin at bottom of editor
-	}, "\n")
+
+	if len(m.attachments.List()) > 0 {
+		parts = append(parts, m.attachments.Render(width))
+	}
+
+	parts = append(parts, m.textarea.View(), "")
+	return strings.Join(parts, "\n")
+}
+
+// editorAgentIndicator renders the current agent name above the editor.
+func (m *UI) editorAgentIndicator(width int) string {
+	agentID := m.com.Workspace.AgentCurrent()
+	if agentID == "" {
+		return ""
+	}
+	agentCfg, ok := m.com.Config().Agents[agentID]
+	displayName := agentID
+	if ok && agentCfg.Name != "" {
+		displayName = agentCfg.Name
+	}
+	t := m.com.Styles
+	icon := t.Sidebar.AgentIcon.Render(styles.AgentIcon)
+	name := t.Sidebar.AgentName.Render(displayName)
+	hint := t.Editor.AgentHint.Render("ctrl+a")
+	return lipgloss.NewStyle().Width(width).Render(
+		fmt.Sprintf("%s %s %s", icon, name, hint),
+	)
 }
 
 // applyTheme replaces the active styles with the given theme and

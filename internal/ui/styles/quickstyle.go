@@ -676,6 +676,16 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Tool.HookDeniedReason = base.Foreground(o.bgMostVisible)
 	s.Tool.HookRewrote = base.Foreground(o.bgMostVisible)
 
+	// ShowFile bordered display.
+	showFileBorder := lipgloss.RoundedBorder()
+	s.Tool.ShowFileBorder = lipgloss.NewStyle().
+		Border(showFileBorder).
+		BorderRight(false).
+		BorderForeground(o.fgMoreSubtle).
+		PaddingLeft(1)
+	s.Tool.ShowFileTitle = base.Foreground(o.info)
+	s.Tool.ShowFileCollapsed = lipgloss.NewStyle().Foreground(o.fgMostSubtle)
+
 	// Tool-call action verbs and result-list styling.
 	s.Tool.ActionCreate = lipgloss.NewStyle().Foreground(o.successMoreSubtle)
 	s.Tool.ActionDestroy = lipgloss.NewStyle().Foreground(o.destructive)
@@ -695,6 +705,7 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Editor.PromptYoloIconBlurred = s.Editor.PromptYoloIconFocused.Foreground(o.bgBase).Background(o.fgMoreSubtle)
 	s.Editor.PromptYoloDotsFocused = lipgloss.NewStyle().MarginRight(1).Foreground(o.warningSubtle).SetString(":::")
 	s.Editor.PromptYoloDotsBlurred = s.Editor.PromptYoloDotsFocused.Foreground(o.fgMoreSubtle)
+	s.Editor.AgentHint = lipgloss.NewStyle().Foreground(o.fgMostSubtle)
 
 	s.Radio.On = lipgloss.NewStyle().Foreground(o.fgSubtle).SetString(RadioOn)
 	s.Radio.Off = lipgloss.NewStyle().Foreground(o.fgSubtle).SetString(RadioOff)

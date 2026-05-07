@@ -177,9 +177,6 @@ func (m *UI) drawSidebar(scr uv.Screen, area uv.Rectangle) {
 		cwd,
 		"",
 	}
-	if agentLine := m.agentInfo(width); agentLine != "" {
-		blocks = append(blocks, agentLine)
-	}
 	blocks = append(blocks,
 		m.modelInfo(width),
 		"",

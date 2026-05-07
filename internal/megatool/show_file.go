@@ -13,10 +13,13 @@ import (
 	"charm.land/fantasy"
 )
 
-// ShowFileResponseMetadata is the metadata stored in ToolResult.Metadata
-// for the chat renderer to read file content from.
-type ShowFileResponseMetadata struct {
-	Content string `json:"content"`
+// ShowFileInnerMetadata is set on the inner ToolResponse.Metadata so the
+// TUI can render line-range collapse indicators and choose between code
+// highlighting and markdown rendering.
+type ShowFileInnerMetadata struct {
+	TotalLines int `json:"total_lines"`
+	Offset     int `json:"offset"`
+	Limit      int `json:"limit"`
 }
 
 const ShowFileToolName = "show_file"
@@ -112,28 +115,27 @@ func (t *ShowFileTool) Run(ctx context.Context, call fantasy.ToolCall) (fantasy.
 	}
 	defer f.Close()
 
-	var lines []string
+	var allLines []string
 	scanner := bufio.NewScanner(f)
-	lineNum := 0
 	for scanner.Scan() {
-		lineNum++
-		if lineNum < params.Offset {
-			continue
-		}
-		if len(lines) >= params.Limit {
-			break
-		}
-		lines = append(lines, scanner.Text())
+		allLines = append(allLines, scanner.Text())
 	}
 	if err := scanner.Err(); err != nil {
 		return fantasy.NewTextErrorResponse("error reading file: " + err.Error()), nil
 	}
 
-	if len(lines) == 0 {
+	if len(allLines) == 0 {
 		return fantasy.NewTextResponse("File is empty or offset is beyond file length."), nil
 	}
 
-	return fantasy.NewTextResponse(strings.Join(lines, "\n")), nil
+	resp := fantasy.NewTextResponse(strings.Join(allLines, "\n"))
+	resp = fantasy.WithResponseMetadata(resp, ShowFileInnerMetadata{
+		TotalLines: len(allLines),
+		Offset:     params.Offset,
+		Limit:      params.Limit,
+	})
+
+	return resp, nil
 }
 
 func (t *ShowFileTool) Mode() ResponseMode {

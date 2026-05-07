@@ -64,6 +64,7 @@ type KeyMap struct {
 	Suspend  key.Binding
 	Sessions  key.Binding
 	Tab       key.Binding
+	Agents    key.Binding
 	Dashboard key.Binding
 	Instances key.Binding
 }
@@ -98,9 +99,13 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("tab"),
 			key.WithHelp("tab", "change focus"),
 		),
+		Agents: key.NewBinding(
+			key.WithKeys("ctrl+a"),
+			key.WithHelp("ctrl+a", "agents"),
+		),
 		Dashboard: key.NewBinding(
 			key.WithKeys("ctrl+shift+d"),
-			key.WithHelp("ctrl+shift+d", "agents"),
+			key.WithHelp("ctrl+shift+d", "dashboard"),
 		),
 		Instances: key.NewBinding(
 			key.WithKeys("ctrl+shift+i"),

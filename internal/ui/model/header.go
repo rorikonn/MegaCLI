@@ -139,15 +139,6 @@ func renderHeaderDetails(
 
 	var parts []string
 
-	currentAgent := com.Workspace.AgentCurrent()
-	if currentAgent != "" {
-		agentName := currentAgent
-		if a, ok := com.Config().Agents[currentAgent]; ok && a.Name != "" {
-			agentName = a.Name
-		}
-		parts = append(parts, t.Sidebar.AgentIcon.Render(styles.AgentIcon)+" "+t.Sidebar.AgentName.Render(agentName))
-	}
-
 	if lspErrorCount > 0 {
 		parts = append(parts, t.LSP.ErrorDiagnostic.Render(fmt.Sprintf("%s%d", styles.LSPErrorIcon, lspErrorCount)))
 	}

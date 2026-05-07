@@ -187,6 +187,11 @@ func TestYourFunction(t *testing.T) {
   `docs:`, `sec:`, etc).
 - Try to keep commits to one line, not including your attribution. Only use
   multi-line commits when additional context is truly necessary.
+- **Unrelated changes**: When committing or releasing, if you find modified
+  files that are NOT part of your current task, only stage the files you
+  changed. Do NOT revert/checkout unrelated files — leave them as-is in the
+  working tree. If a file contains both your changes and pre-existing
+  unrelated changes, ask the user how to handle it before proceeding.
 
 ## Working on the TUI (UI)
 

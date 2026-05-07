@@ -31,9 +31,6 @@ func (m *UI) landingView() string {
 	}
 
 	parts = append(parts, "")
-	if agentLine := m.agentInfo(width); agentLine != "" {
-		parts = append(parts, agentLine)
-	}
 	parts = append(parts, m.modelInfo(width))
 	infoSection := lipgloss.JoinVertical(lipgloss.Left, parts...)
 

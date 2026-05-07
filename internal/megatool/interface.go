@@ -44,6 +44,7 @@ type DisplayEvent struct {
 // so that the Chat renderer can extract the full content for inline display
 // while the LLM only sees a short summary in ToolResponse.Content.
 type DisplayMetadata struct {
-	ToolName string `json:"tool_name"`
-	Content  string `json:"content"`
+	ToolName      string `json:"tool_name"`
+	Content       string `json:"content"`
+	InnerMetadata string `json:"inner_metadata,omitempty"`
 }
