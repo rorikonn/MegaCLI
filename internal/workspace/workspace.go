@@ -97,6 +97,10 @@ type Workspace interface {
 	PermissionSkipRequests() bool
 	PermissionSetSkipRequests(skip bool)
 
+	// AskUser
+	AskUserRespond(requestID string, answers []string)
+	AskUserCancel(requestID string)
+
 	// FileTracker
 	FileTrackerRecordRead(ctx context.Context, sessionID, path string)
 	FileTrackerLastReadTime(ctx context.Context, sessionID, path string) time.Time

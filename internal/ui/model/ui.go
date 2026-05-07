@@ -33,6 +33,7 @@ import (
 	"github.com/megacli/megacli/internal/agent/hyper"
 	"github.com/megacli/megacli/internal/agent/notify"
 	agenttools "github.com/megacli/megacli/internal/agent/tools"
+	"github.com/megacli/megacli/internal/askuser"
 	"github.com/megacli/megacli/internal/agent/tools/mcp"
 	"github.com/megacli/megacli/internal/app"
 	"github.com/megacli/megacli/internal/commands"
@@ -288,6 +289,10 @@ type UI struct {
 	// Used by handleKeyReleaseMsg to distinguish a normal V release from a
 	// swallowed Ctrl+V release on Windows Terminal.
 	lastVKeyPressAt time.Time
+
+	// askUser holds the active ask_user tool state while the user is
+	// answering questions. nil when not in ask mode.
+	askUser *askUserState
 
 	// hyperCredits is the remaining Hyper credits, updated after each prompt.
 	hyperCredits *int
@@ -712,6 +717,8 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case pubsub.Event[permission.PermissionNotification]:
 		m.handlePermissionNotification(msg.Payload)
+	case pubsub.Event[askuser.AskUserRequest]:
+		m.enterAskMode(msg.Payload)
 	case cancelTimerExpiredMsg:
 		m.isCanceling = false
 	case tea.TerminalVersionMsg:
@@ -1915,6 +1922,14 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 		return m.handleDialogMsg(msg)
 	}
 
+	// In ask mode, Escape exits the ask session rather than canceling the
+	// agent.
+	if m.askUser != nil && key.Matches(msg, m.keyMap.Chat.Cancel) {
+		m.com.Workspace.AskUserCancel(m.askUser.request.ID)
+		m.exitAskMode()
+		return tea.Batch(cmds...)
+	}
+
 	// Handle cancel key when agent is busy.
 	if key.Matches(msg, m.keyMap.Chat.Cancel) {
 		if m.isAgentBusy() {
@@ -1959,6 +1974,14 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 				return tea.Batch(cmds...)
 			}
 
+			// Handle ask_user mode keys before other editor keys.
+			if consumed, cmd := m.handleAskUserKeyPress(msg); consumed {
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+				return tea.Batch(cmds...)
+			}
+
 			switch {
 			case key.Matches(msg, m.keyMap.Editor.AddImage):
 				if !m.currentModelSupportsImages() {
@@ -1975,6 +1998,10 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 				} else {
 					cmds = append(cmds, m.pasteTextFromClipboard)
 				}
+
+			case m.askUser != nil && key.Matches(msg, m.keyMap.Editor.SendMessage):
+				m.confirmAskUser()
+				return nil
 
 			case key.Matches(msg, m.keyMap.Editor.SendMessage):
 				prevHeight := m.textarea.Height()
@@ -2395,6 +2422,19 @@ func (m *UI) ShortHelp() []key.Binding {
 	case uiInitialize:
 		binds = append(binds, k.Quit)
 	case uiChat:
+		// In ask mode, show ask-specific help.
+		if m.askUser != nil {
+			binds = append(binds,
+				key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑/↓", "select")),
+				key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "confirm")),
+				key.NewBinding(key.WithKeys("left", "right"), key.WithHelp("←/→", "prev/next")),
+				key.NewBinding(key.WithKeys("1"), key.WithHelp("1-0", "quick select")),
+				key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
+			)
+			binds = append(binds, k.Help)
+			return binds
+		}
+
 		// Show cancel binding if agent is busy.
 		if m.isAgentBusy() {
 			cancelBinding := k.Chat.Cancel
@@ -3203,15 +3243,21 @@ func (m *UI) editorMargin() int {
 	if m.com.Workspace != nil && m.com.Workspace.AgentCurrent() != "" {
 		margin++
 	}
+	if m.askUser != nil {
+		margin += askUserPanelHeight(m.askUser)
+	}
 	return margin
 }
 
 // editorContentOffset returns the number of lines rendered above the textarea
-// in the editor area (agent indicator and/or attachments row).
+// in the editor area (agent indicator, ask panel, and/or attachments row).
 func (m *UI) editorContentOffset() int {
 	offset := 0
 	if m.com.Workspace != nil && m.com.Workspace.AgentCurrent() != "" {
 		offset++
+	}
+	if m.askUser != nil {
+		offset += askUserPanelHeight(m.askUser)
 	}
 	if m.attachments != nil && len(m.attachments.List()) > 0 {
 		offset++
@@ -3225,6 +3271,10 @@ func (m *UI) renderEditorView(width int) string {
 
 	if line := m.editorAgentIndicator(width); line != "" {
 		parts = append(parts, line)
+	}
+
+	if m.askUser != nil {
+		parts = append(parts, renderAskUserPanel(m.com.Styles, m.askUser, width))
 	}
 
 	if len(m.attachments.List()) > 0 {

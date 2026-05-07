@@ -546,6 +546,7 @@ const maxRecentModelsPerType = 5
 func allToolNames() []string {
 	return []string{
 		"agent",
+		"ask_user",
 		"bash",
 		"crush_info",
 		"megacli_logs",

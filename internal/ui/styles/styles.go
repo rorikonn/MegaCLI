@@ -368,6 +368,16 @@ type Styles struct {
 		ShowFileCollapsed lipgloss.Style // Collapsed range hint ("… N lines …").
 	}
 
+	// AskUser panel styles (ask_user tool question UI).
+	AskUser struct {
+		Border   lipgloss.Style // Outer frame.
+		Progress lipgloss.Style // "1 / 3" counter.
+		Question lipgloss.Style // Question text.
+		Shortcut lipgloss.Style // "[alt+1]" labels.
+		Option   lipgloss.Style // Option text.
+		Selected lipgloss.Style // "✓ answer" indicator.
+	}
+
 	// Dialog styles
 	Dialog struct {
 		Title              lipgloss.Style

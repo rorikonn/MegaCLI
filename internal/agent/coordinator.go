@@ -23,6 +23,7 @@ import (
 	"github.com/megacli/megacli/internal/agent/notify"
 	"github.com/megacli/megacli/internal/agent/prompt"
 	"github.com/megacli/megacli/internal/agent/tools"
+	"github.com/megacli/megacli/internal/askuser"
 	"github.com/megacli/megacli/internal/config"
 	"github.com/megacli/megacli/internal/event"
 	"github.com/megacli/megacli/internal/filetracker"
@@ -98,6 +99,7 @@ type coordinator struct {
 	permissions permission.Service
 	history     history.Service
 	filetracker filetracker.Service
+	askUser     askuser.Service
 	lspManager  *lsp.Manager
 	notify      pubsub.Publisher[notify.Notification]
 
@@ -131,6 +133,7 @@ func NewCoordinator(
 	permissions permission.Service,
 	history history.Service,
 	filetracker filetracker.Service,
+	askUser askuser.Service,
 	lspManager *lsp.Manager,
 	notify pubsub.Publisher[notify.Notification],
 ) (Coordinator, error) {
@@ -145,6 +148,7 @@ func NewCoordinator(
 		permissions:      permissions,
 		history:          history,
 		filetracker:      filetracker,
+		askUser:          askUser,
 		lspManager:       lspManager,
 		notify:           notify,
 		agents:           make(map[string]SessionAgent),
@@ -519,6 +523,7 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubA
 	}
 
 	allTools = append(allTools,
+		tools.NewAskUserTool(c.askUser),
 		tools.NewBashTool(c.permissions, c.cfg.WorkingDir(), c.cfg.Config().Options.Attribution, modelName),
 		tools.NewCrushInfoTool(c.cfg, c.lspManager, c.allSkills, c.activeSkills, c.skillTracker),
 		tools.NewCrushLogsTool(logFile),

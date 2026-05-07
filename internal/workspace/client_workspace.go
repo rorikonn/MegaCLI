@@ -319,6 +319,16 @@ func (w *ClientWorkspace) PermissionSetSkipRequests(skip bool) {
 	_ = w.client.SetPermissionsSkipRequests(context.Background(), w.workspaceID(), skip)
 }
 
+// -- AskUser --
+
+func (w *ClientWorkspace) AskUserRespond(_ string, _ []string) {
+	// TODO: implement remote ask_user support.
+}
+
+func (w *ClientWorkspace) AskUserCancel(_ string) {
+	// TODO: implement remote ask_user support.
+}
+
 // -- FileTracker --
 
 func (w *ClientWorkspace) FileTrackerRecordRead(ctx context.Context, sessionID, path string) {

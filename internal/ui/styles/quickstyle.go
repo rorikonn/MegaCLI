@@ -684,6 +684,17 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Tool.ShowFileTitle = base.Foreground(o.info)
 	s.Tool.ShowFileCollapsed = lipgloss.NewStyle().Foreground(o.fgMostSubtle)
 
+	// AskUser panel.
+	s.AskUser.Border = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(o.fgSubtle).
+		PaddingLeft(1).PaddingRight(1)
+	s.AskUser.Progress = lipgloss.NewStyle().Foreground(o.fgMoreSubtle)
+	s.AskUser.Question = lipgloss.NewStyle().Foreground(o.info).Bold(true)
+	s.AskUser.Shortcut = lipgloss.NewStyle().Foreground(o.fgMoreSubtle)
+	s.AskUser.Option = base
+	s.AskUser.Selected = lipgloss.NewStyle().Foreground(o.info)
+
 	// Tool-call action verbs and result-list styling.
 	s.Tool.ActionCreate = lipgloss.NewStyle().Foreground(o.successMoreSubtle)
 	s.Tool.ActionDestroy = lipgloss.NewStyle().Foreground(o.destructive)

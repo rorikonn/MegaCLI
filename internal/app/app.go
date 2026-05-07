@@ -24,6 +24,7 @@ import (
 	"github.com/megacli/megacli/internal/agent"
 	"github.com/megacli/megacli/internal/agent/notify"
 	"github.com/megacli/megacli/internal/agent/tools/mcp"
+	"github.com/megacli/megacli/internal/askuser"
 	"github.com/megacli/megacli/internal/config"
 	"github.com/megacli/megacli/internal/db"
 	"github.com/megacli/megacli/internal/event"
@@ -72,6 +73,7 @@ type App struct {
 	History     history.Service
 	Permissions permission.Service
 	FileTracker filetracker.Service
+	AskUser     askuser.Service
 
 	AgentCoordinator agent.Coordinator
 
@@ -128,6 +130,7 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore) (*App, er
 		History:     files,
 		Permissions: permission.NewPermissionService(store.WorkingDir(), skipPermissionsRequests, allowedTools),
 		FileTracker: filetracker.NewService(q),
+		AskUser:     askuser.NewService(),
 		LSPManager:  lsp.NewManager(store),
 
 		Orchestrator:     orch,
@@ -548,6 +551,7 @@ func (app *App) setupEvents() {
 	setupSubscriber(ctx, app.serviceEventsWG, "mcp", mcp.SubscribeEvents, app.events)
 	setupSubscriber(ctx, app.serviceEventsWG, "lsp", SubscribeLSPEvents, app.events)
 	setupSubscriber(ctx, app.serviceEventsWG, "skills", skills.SubscribeEvents, app.events)
+	setupSubscriber(ctx, app.serviceEventsWG, "askuser", app.AskUser.Subscribe, app.events)
 	cleanupFunc := func(context.Context) error {
 		cancel()
 		app.serviceEventsWG.Wait()
@@ -596,6 +600,7 @@ func (app *App) InitCoderAgent(ctx context.Context) error {
 		app.Permissions,
 		app.History,
 		app.FileTracker,
+		app.AskUser,
 		app.LSPManager,
 		app.agentNotifications,
 	)
