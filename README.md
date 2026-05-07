@@ -1,17 +1,18 @@
 # MegaCLI
 
-> 本项目基于 [Crush](https://github.com/charmbracelet/crush) 修改而来。
+> 本项目基于 [Crush](https://github.com/charmbracelet/crush)（由 [Charm](https://charm.land) 开发的终端 AI 编程助手）二次开发而来，仅供内部使用，不对外提供商业服务。
+> 原项目遵循 [FSL-1.1-MIT](./LICENSE.md) 协议，本项目保留原始版权声明与许可条款。
 
 终端里的 AI 编程助手，无缝接入你的工具、代码与工作流，全面兼容主流 LLM 模型。
 
 ## Features
 
-- **Multi-Model:** choose from a wide range of LLMs or add your own via OpenAI- or Anthropic-compatible APIs
-- **Flexible:** switch LLMs mid-session while preserving context
-- **Session-Based:** maintain multiple work sessions and contexts per project
-- **LSP-Enhanced:** uses LSPs for additional context, just like you do
-- **Extensible:** add capabilities via MCPs (`http`, `stdio`, and `sse`)
-- **Works Everywhere:** first-class support in every terminal on macOS, Linux, Windows (PowerShell and WSL), Android, FreeBSD, OpenBSD, and NetBSD
+- **Multi-Model:** 支持丰富的 LLM 模型，也可通过 OpenAI 或 Anthropic 兼容 API 接入自定义模型
+- **Flexible:** 会话中途切换模型，上下文不丢失
+- **Session-Based:** 每个项目支持多个独立工作会话与上下文
+- **LSP-Enhanced:** 利用 LSP 提供代码智能上下文
+- **Extensible:** 通过 MCP（`http`、`stdio`、`sse`）扩展能力
+- **Works Everywhere:** 全面支持 macOS、Linux、Windows（PowerShell 和 WSL）、Android、FreeBSD、OpenBSD 和 NetBSD
 
 ## Installation
 
@@ -27,7 +28,7 @@ irm https://raw.githubusercontent.com/rorikonn/MegaCLI/master/scripts/install.ps
 curl -sSf https://raw.githubusercontent.com/rorikonn/MegaCLI/master/scripts/install.sh | sh
 ```
 
-Or build from source:
+或从源码构建：
 
 ```bash
 go install github.com/megacli/megacli@latest
@@ -35,10 +36,9 @@ go install github.com/megacli/megacli@latest
 
 ## Getting Started
 
-Grab an API key for your preferred provider (Anthropic, OpenAI, Groq, OpenRouter, etc.) and
-run `megacli`. You'll be prompted to enter your API key on first run.
+获取你偏好的模型提供商的 API Key（Anthropic、OpenAI、Groq、OpenRouter 等），然后运行 `megacli`。首次运行时会提示你输入 API Key。
 
-You can also set environment variables for preferred providers:
+也可以通过环境变量配置：
 
 | Environment Variable        | Provider                                           |
 | --------------------------- | -------------------------------------------------- |
@@ -59,16 +59,15 @@ You can also set environment variables for preferred providers:
 
 ## Configuration
 
-MegaCLI runs great with no configuration. If you want to customize it,
-configuration can be added locally or globally, with the following priority:
+MegaCLI 无需任何配置即可运行。如需自定义，可在本地或全局添加配置文件，优先级如下：
 
-1. `.crush.json`
-2. `crush.json`
-3. `$HOME/.config/crush/crush.json`
+1. `.megacli.json`（项目目录）
+2. `megacli.json`（项目目录）
+3. `$HOME/.config/megacli/megacli.json`（全局配置）
 
 ### LSPs
 
-MegaCLI can use LSPs for additional context:
+MegaCLI 可以利用 LSP 获取额外的代码上下文：
 
 ```json
 {
@@ -86,7 +85,7 @@ MegaCLI can use LSPs for additional context:
 
 ### MCPs
 
-MegaCLI supports MCP servers through three transport types: `stdio`, `http`, and `sse`.
+MegaCLI 支持三种传输类型的 MCP 服务：`stdio`、`http` 和 `sse`。
 
 ```json
 {
@@ -109,18 +108,15 @@ MegaCLI supports MCP servers through three transport types: `stdio`, `http`, and
 
 ### Hooks
 
-MegaCLI has preliminary support for hooks. For details, see
-[the hook guide](./docs/hooks/).
+MegaCLI 初步支持 Hooks 机制。详情请参阅 [Hook 指南](./docs/hooks/)。
 
 ### Ignoring Files
 
-MegaCLI respects `.gitignore` files by default. You can also create a
-`.crushignore` file to specify additional files and directories to ignore.
+MegaCLI 默认遵循 `.gitignore` 规则。你也可以创建 `.megacliignore` 文件来指定额外需要忽略的文件和目录。
 
 ### Allowing Tools
 
-By default, MegaCLI will ask for permission before running tool calls. You
-can allow tools to execute without prompting:
+默认情况下，MegaCLI 在执行工具调用前会请求用户确认。你可以预先允许特定工具免确认执行：
 
 ```json
 {
@@ -135,12 +131,11 @@ can allow tools to execute without prompting:
 }
 ```
 
-You can also skip all permission prompts by running with the `--yolo` flag.
+也可以使用 `--yolo` 参数跳过所有权限确认。
 
 ### Custom Providers
 
-MegaCLI supports custom provider configurations for both OpenAI-compatible and
-Anthropic-compatible APIs.
+MegaCLI 支持 OpenAI 兼容和 Anthropic 兼容的自定义 Provider 配置。
 
 #### OpenAI-Compatible APIs
 
@@ -164,7 +159,7 @@ Anthropic-compatible APIs.
 }
 ```
 
-#### Local Models (Ollama / LM Studio)
+#### 本地模型 (Ollama / LM Studio)
 
 ```json
 {
@@ -188,18 +183,14 @@ Anthropic-compatible APIs.
 
 ## Logging
 
-Logs are stored in `./.crush/logs/crush.log` relative to the project.
+日志存储在项目目录下的 `./.megacli/logs/crush.log`。
 
 ```bash
-# Print the last 1000 lines
+# 打印最后 1000 行日志
 megacli logs
 
-# Follow logs in real time
+# 实时跟踪日志
 megacli logs --follow
 ```
 
-Run with `--debug` for more verbose logging.
-
-## License
-
-[FSL-1.1-MIT](https://github.com/charmbracelet/crush/raw/main/LICENSE.md)
+使用 `--debug` 参数可输出更详细的日志。
