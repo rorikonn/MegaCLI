@@ -594,12 +594,15 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.loadPromptHistory())
 		m.updateLayoutAndSize()
 		if saved := strings.TrimSpace(m.session.ActiveAgent); saved != "" {
-			if _, err := m.com.Workspace.AgentSwitch(context.Background(), saved); err != nil {
-				slog.Warn("Could not restore agent from session, using default",
-					"saved_agent", saved, "error", err)
-				cmds = append(cmds, util.ReportWarn(
-					fmt.Sprintf("Session agent %q no longer available, using %q",
-						saved, m.com.Workspace.AgentCurrent())))
+			current := m.com.Workspace.AgentCurrent()
+			if saved != current {
+				if _, err := m.com.Workspace.AgentSwitch(context.Background(), saved); err != nil {
+					slog.Warn("Could not restore agent from session, using default",
+						"saved_agent", saved, "error", err)
+					cmds = append(cmds, util.ReportWarn(
+						fmt.Sprintf("Session agent %q no longer available, using %q",
+							saved, current)))
+				}
 			}
 		}
 
@@ -1462,9 +1465,12 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 	case dialog.ActionSwitchAgent:
 		m.dialog.CloseDialog(dialog.AgentsID)
 		m.dialog.CloseDialog(dialog.CommandsID)
-		sessionID := ""
 		if m.session != nil {
-			sessionID = m.session.ID
+			m.session.ActiveAgent = msg.AgentID
+			if err := m.com.Workspace.UpdateSessionActiveAgent(
+				context.Background(), m.session.ID, msg.AgentID); err != nil {
+				slog.Error("Failed to persist active agent to session", "error", err)
+			}
 		}
 		cmds = append(cmds, func() tea.Msg {
 			ctx := context.Background()
@@ -1474,11 +1480,6 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 			}
 			if deferred {
 				return util.NewInfoMsg("Agent will switch to " + msg.AgentID + " after current task completes")
-			}
-			if sessionID != "" {
-				if err := m.com.Workspace.UpdateSessionActiveAgent(ctx, sessionID, msg.AgentID); err != nil {
-					slog.Error("Failed to persist active agent to session", "error", err)
-				}
 			}
 			return util.NewInfoMsg("Switched to agent: " + msg.AgentID)
 		})
