@@ -3304,7 +3304,7 @@ func (m *UI) editorMargin() int {
 func (m *UI) editorContentOffset() int {
 	offset := 0
 	if m.com.Workspace != nil && m.com.Workspace.AgentCurrent() != "" {
-		offset++
+		offset += 2
 	}
 	if m.askUser != nil {
 		offset += askUserPanelHeight(m.askUser)
@@ -3324,7 +3324,7 @@ func (m *UI) renderEditorView(width int) string {
 	}
 
 	if line := m.editorAgentIndicator(width); line != "" {
-		parts = append(parts, line)
+		parts = append(parts, line, "")
 	}
 
 	if len(m.attachments.List()) > 0 {

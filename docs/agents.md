@@ -27,7 +27,7 @@ and tools without losing conversation history.
 Start MegaCLI with a specific agent:
 
 ```bash
-megacli --agent plan
+megacli --agent planner
 megacli -a debug
 ```
 

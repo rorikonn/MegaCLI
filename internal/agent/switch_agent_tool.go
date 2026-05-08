@@ -9,6 +9,7 @@ import (
 	"charm.land/fantasy"
 
 	"github.com/megacli/megacli/internal/agent/tools"
+	"github.com/megacli/megacli/internal/askuser"
 	"github.com/megacli/megacli/internal/config"
 )
 
@@ -16,11 +17,14 @@ const SwitchAgentToolName = "switch_agent"
 
 // SwitchAgentParams are the LLM-provided parameters for the switch_agent tool.
 type SwitchAgentParams struct {
-	AgentID string `json:"agent_id" description:"The ID of the agent to switch to (e.g. 'coder', 'plan')."`
+	AgentID        string `json:"agent_id" description:"The ID of the agent to switch to (e.g. 'coder', 'planner')."`
+	Reason         string `json:"reason" description:"Why the switch is suggested."`
+	AcceptResponse string `json:"accept_response" description:"Content returned to you if the user accepts the switch."`
+	RejectResponse string `json:"reject_response" description:"Content returned to you if the user rejects the switch."`
 }
 
 func (c *coordinator) switchAgentToolDesc() string {
-	base := "Switch the active agent. Only primary agents can be switched to. The switch takes effect on the next turn; the current turn continues normally."
+	base := "Suggest switching to a different agent. The user will be asked to confirm. Provide a reason, and specify what content you want returned for both accept and reject outcomes."
 	agents := c.AvailableAgents()
 	if len(agents) <= 1 {
 		return base
@@ -68,25 +72,59 @@ func (c *coordinator) switchAgentTool() fantasy.AgentTool {
 				), nil
 			}
 
-			desc := agentCfg.Description
-			if desc == "" {
-				desc = agentCfg.Name
+			currentName := c.currentAgentName.Get()
+			targetName := agentCfg.Name
+			if targetName == "" {
+				targetName = params.AgentID
 			}
 
-			if _, err := c.SwitchAgent(ctx, params.AgentID); err != nil {
-				return fantasy.NewTextErrorResponse(fmt.Sprintf("failed to switch agent: %v", err)), nil
+			reason := params.Reason
+			if reason == "" {
+				reason = "No reason provided"
 			}
 
-			// Persist the active agent to the session DB.
-			if sessionID := tools.GetSessionFromContext(ctx); sessionID != "" {
-				if err := c.sessions.UpdateActiveAgent(ctx, sessionID, params.AgentID); err != nil {
-					slog.Error("Failed to persist active agent to session", "error", err)
+			question := askuser.Question{
+				Content: fmt.Sprintf("%s suggests switching to %s\nReason: %s", currentName, targetName, reason),
+				Options: []string{"Accept", "Reject"},
+			}
+
+			sessionID := tools.GetSessionFromContext(ctx)
+			resp, err := c.askUser.Request(ctx, []askuser.Question{question}, sessionID)
+			if err != nil {
+				r := fantasy.NewTextErrorResponse("User cancelled the switch request.")
+				r.StopTurn = true
+				return r, nil
+			}
+
+			answer := ""
+			if len(resp.Answers) > 0 {
+				answer = strings.TrimSpace(resp.Answers[0])
+			}
+
+			switch answer {
+			case "Accept":
+				if _, err := c.SwitchAgent(ctx, params.AgentID); err != nil {
+					return fantasy.NewTextErrorResponse(fmt.Sprintf("failed to switch agent: %v", err)), nil
 				}
-			}
+				if sessionID != "" {
+					if err := c.sessions.UpdateActiveAgent(ctx, sessionID, params.AgentID); err != nil {
+						slog.Error("Failed to persist active agent to session", "error", err)
+					}
+				}
+				if params.AcceptResponse != "" {
+					return fantasy.NewTextResponse(params.AcceptResponse), nil
+				}
+				return fantasy.NewTextResponse(fmt.Sprintf("Switched to agent %q. The new agent is now active.", params.AgentID)), nil
 
-			return fantasy.NewTextResponse(fmt.Sprintf(
-				"Switched to agent %q (%s). The new agent is now active. Follow the instructions in your system prompt for this agent.",
-				params.AgentID, desc,
-			)), nil
+			case "Reject":
+				if params.RejectResponse != "" {
+					return fantasy.NewTextResponse(params.RejectResponse), nil
+				}
+				return fantasy.NewTextResponse("User rejected the switch. Continuing with current agent."), nil
+
+			default:
+				// User typed a custom response instead of selecting an option.
+				return fantasy.NewTextResponse(answer), nil
+			}
 		})
 }

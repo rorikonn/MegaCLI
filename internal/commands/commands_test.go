@@ -128,14 +128,14 @@ func TestLoadCommand_WithFrontmatter(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	content := "---\ndescription: Test command\nagent: plan\nmodel: openai/gpt-4\n---\n\nRun $ACTION on $TARGET."
+	content := "---\ndescription: Test command\nagent: planner\nmodel: openai/gpt-4\n---\n\nRun $ACTION on $TARGET."
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "test.md"), []byte(content), 0o644))
 
 	cmds, err := loadFromSource(commandSource{path: dir, prefix: projectCommandPrefix})
 	require.NoError(t, err)
 	require.Len(t, cmds, 1)
 	require.Equal(t, "Test command", cmds[0].Description)
-	require.Equal(t, "plan", cmds[0].Agent)
+	require.Equal(t, "planner", cmds[0].Agent)
 	require.Equal(t, "openai/gpt-4", cmds[0].Model)
 	require.Equal(t, "Run $ACTION on $TARGET.", cmds[0].Content)
 	require.Len(t, cmds[0].Arguments, 2)

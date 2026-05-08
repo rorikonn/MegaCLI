@@ -59,9 +59,9 @@ const (
 )
 
 const (
-	AgentCoder string = "coder"
-	AgentTask  string = "task"
-	AgentPlan  string = "plan"
+	AgentCoder   string = "coder"
+	AgentTask    string = "task"
+	AgentPlanner string = "planner"
 )
 
 // AgentRole distinguishes primary agents from subagents.
@@ -629,13 +629,13 @@ func (c *Config) SetupAgents() {
 			AllowedMCP:   map[string][]string{},
 		},
 
-		AgentPlan: {
-			ID:           AgentPlan,
-			Name:         "Plan",
+		AgentPlanner: {
+			ID:           AgentPlanner,
+			Name:         "Planner",
 			Description:  "A planning agent that first creates implementation plans, then executes after user confirmation.",
 			Role:         AgentRolePrimary,
 			Model:        SelectedModelTypeLarge,
-			Prompt:       "plan",
+			Prompt:       "planner",
 			ContextPaths: c.Options.ContextPaths,
 			AllowedTools: allowedTools,
 		},

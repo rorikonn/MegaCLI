@@ -22,8 +22,8 @@ var coderPromptTmpl []byte
 //go:embed templates/task.md.tpl
 var taskPromptTmpl []byte
 
-//go:embed templates/plan.md.tpl
-var planPromptTmpl []byte
+//go:embed templates/planner.md.tpl
+var plannerPromptTmpl []byte
 
 //go:embed templates/initialize.md.tpl
 var initializePromptTmpl []byte
