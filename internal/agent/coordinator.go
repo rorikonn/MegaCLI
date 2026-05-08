@@ -328,10 +328,12 @@ func (c *coordinator) Run(ctx context.Context, sessionID string, prompt string, 
 		}
 	}
 
-	// Apply deferred switch immediately after the run completes,
-	// so the user sees the new agent without needing to send
-	// another message.
-	c.applyPendingSwitch(ctx, sessionID)
+	// Apply deferred switch immediately after the run completes.
+	// If a switch was applied and the first run succeeded, re-run
+	// so the new agent continues with the user's request.
+	if c.applyPendingSwitch(ctx, sessionID) && originalErr == nil {
+		return c.Run(ctx, sessionID, "Continue.")
+	}
 
 	return result, originalErr
 }
@@ -1146,22 +1148,24 @@ func (c *coordinator) applySwitchAgent(ctx context.Context, name string) error {
 }
 
 // applyPendingSwitch consumes any deferred agent switch. Called at
-// the start of coordinator.Run before UpdateModels.
-func (c *coordinator) applyPendingSwitch(ctx context.Context, sessionID string) {
+// the start of coordinator.Run before UpdateModels. Returns true if
+// a switch was actually applied.
+func (c *coordinator) applyPendingSwitch(ctx context.Context, sessionID string) bool {
 	name := c.pendingSwitch.Get()
 	if name == "" {
-		return
+		return false
 	}
 	c.pendingSwitch.Set("")
 	if err := c.applySwitchAgent(ctx, name); err != nil {
 		slog.Error("Failed to apply deferred agent switch", "target", name, "error", err)
-		return
+		return false
 	}
 	if sessionID != "" {
 		if err := c.sessions.UpdateActiveAgent(ctx, sessionID, name); err != nil {
 			slog.Error("Failed to persist deferred agent switch", "error", err)
 		}
 	}
+	return true
 }
 
 // PendingSwitch returns the agent ID of a queued switch, or empty

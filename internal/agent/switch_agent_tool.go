@@ -102,19 +102,18 @@ func (c *coordinator) switchAgentTool() fantasy.AgentTool {
 			}
 
 			switch answer {
-			case "Accept":
-				if _, err := c.SwitchAgent(ctx, params.AgentID); err != nil {
-					return fantasy.NewTextErrorResponse(fmt.Sprintf("failed to switch agent: %v", err)), nil
+		case "Accept":
+			if _, err := c.SwitchAgent(ctx, params.AgentID); err != nil {
+				return fantasy.NewTextErrorResponse(fmt.Sprintf("failed to switch agent: %v", err)), nil
+			}
+			if sessionID != "" {
+				if err := c.sessions.UpdateActiveAgent(ctx, sessionID, params.AgentID); err != nil {
+					slog.Error("Failed to persist active agent to session", "error", err)
 				}
-				if sessionID != "" {
-					if err := c.sessions.UpdateActiveAgent(ctx, sessionID, params.AgentID); err != nil {
-						slog.Error("Failed to persist active agent to session", "error", err)
-					}
-				}
-				if params.AcceptResponse != "" {
-					return fantasy.NewTextResponse(params.AcceptResponse), nil
-				}
-				return fantasy.NewTextResponse(fmt.Sprintf("Switched to agent %q. The new agent is now active.", params.AgentID)), nil
+			}
+			r := fantasy.NewTextResponse(fmt.Sprintf("Switched to agent %q.", params.AgentID))
+			r.StopTurn = true
+			return r, nil
 
 			case "Reject":
 				if params.RejectResponse != "" {
