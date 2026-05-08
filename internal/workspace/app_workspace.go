@@ -124,6 +124,17 @@ func (w *AppWorkspace) AgentModel() AgentModel {
 	}
 }
 
+func (w *AppWorkspace) AgentSmallModel() AgentModel {
+	if w.app.AgentCoordinator == nil {
+		return AgentModel{}
+	}
+	m := w.app.AgentCoordinator.SmallModel()
+	return AgentModel{
+		CatwalkCfg: m.CatwalkCfg,
+		ModelCfg:   m.ModelCfg,
+	}
+}
+
 func (w *AppWorkspace) AgentIsReady() bool {
 	return w.app.AgentCoordinator != nil
 }

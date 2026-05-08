@@ -81,6 +81,7 @@ type Workspace interface {
 	AgentIsBusy() bool
 	AgentIsSessionBusy(sessionID string) bool
 	AgentModel() AgentModel
+	AgentSmallModel() AgentModel
 	AgentIsReady() bool
 	AgentQueuedPrompts(sessionID string) int
 	AgentQueuedPromptsList(sessionID string) []string

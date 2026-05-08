@@ -76,6 +76,7 @@ type Coordinator interface {
 	ClearQueue(sessionID string)
 	Summarize(context.Context, string) error
 	Model() Model
+	SmallModel() Model
 	UpdateModels(ctx context.Context) error
 
 	// SetExtraTools injects additional tools (e.g. MegaTool wrappers,
@@ -1064,6 +1065,10 @@ func (c *coordinator) Model() Model {
 	return c.activeModel()
 }
 
+func (c *coordinator) SmallModel() Model {
+	return c.currentAgent.SmallModel()
+}
+
 func (c *coordinator) UpdateModels(ctx context.Context) error {
 	large, small, err := c.buildAgentModels(ctx, false)
 	if err != nil {
@@ -1249,6 +1254,7 @@ type subAgentParams struct {
 	ToolCallID     string
 	Prompt         string
 	SessionTitle   string
+	ModelType      config.SelectedModelType
 	// SessionSetup is an optional callback invoked after session creation
 	// but before agent execution, for custom session configuration.
 	SessionSetup func(sessionID string)
@@ -1293,6 +1299,7 @@ func (c *coordinator) runSubAgent(ctx context.Context, params subAgentParams) (f
 		TopK:             model.ModelCfg.TopK,
 		FrequencyPenalty: model.ModelCfg.FrequencyPenalty,
 		PresencePenalty:  model.ModelCfg.PresencePenalty,
+		ModelType:        params.ModelType,
 		NonInteractive:   true,
 	})
 	if err != nil {

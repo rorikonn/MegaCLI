@@ -7,11 +7,13 @@ import (
 	"strconv"
 	"strings"
 
+	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/megacli/megacli/internal/agent/hyper"
+	"github.com/megacli/megacli/internal/config"
 	"github.com/megacli/megacli/internal/home"
 	"github.com/megacli/megacli/internal/ui/styles"
-	"github.com/charmbracelet/x/ansi"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -34,7 +36,7 @@ func FormatReasoningEffort(effort string) string {
 // ModelContextInfo contains token usage and cost information for a model.
 type ModelContextInfo struct {
 	ContextUsed         int64
-	ModelContext         int64
+	ModelContext        int64
 	Cost                float64
 	InputTokens         int64
 	OutputTokens        int64
@@ -42,9 +44,39 @@ type ModelContextInfo struct {
 	CacheReadTokens     int64
 }
 
+// ModelDisplayName builds a human-readable model name with reasoning suffix.
+// For Anthropic models with thinking enabled: "Claude Opus 4-thinking".
+// For models with reasoning effort levels: "o3-effort-high".
+// Otherwise just the model name.
+func ModelDisplayName(model catwalk.Model, cfg config.SelectedModel) string {
+	name := model.Name
+	if name == "" {
+		return ""
+	}
+
+	if !model.CanReason {
+		return name
+	}
+
+	// Anthropic-style: binary think on/off.
+	if len(model.ReasoningLevels) == 0 {
+		if cfg.Think {
+			return name + "-thinking"
+		}
+		return name
+	}
+
+	// OpenAI-style: effort levels.
+	effort := cmp.Or(cfg.ReasoningEffort, model.DefaultReasoningEffort)
+	if effort != "" {
+		return name + "-effort-" + effort
+	}
+	return name
+}
+
 // ModelInfo renders model information including name, provider, reasoning
 // settings, and optional context usage/cost.
-func ModelInfo(t *styles.Styles, modelName, providerName, reasoningInfo string, context *ModelContextInfo, width int, hyperCredits *int) string {
+func ModelInfo(t *styles.Styles, modelName, smallModelName, providerName string, context *ModelContextInfo, width int, hyperCredits *int) string {
 	modelIcon := t.ModelInfo.Icon.Render(styles.ModelIcon)
 	modelName = t.ModelInfo.Name.Render(modelName)
 
@@ -73,8 +105,8 @@ func ModelInfo(t *styles.Styles, modelName, providerName, reasoningInfo string, 
 		parts = append(parts, t.ModelInfo.ProviderFallback.Render(providerInfo))
 	}
 
-	if reasoningInfo != "" {
-		parts = append(parts, t.ModelInfo.Reasoning.Render(reasoningInfo))
+	if smallModelName != "" {
+		parts = append(parts, t.ModelInfo.Reasoning.Render(smallModelName))
 	}
 
 	if context != nil {

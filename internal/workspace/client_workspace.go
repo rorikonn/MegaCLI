@@ -197,6 +197,17 @@ func (w *ClientWorkspace) AgentModel() AgentModel {
 	}
 }
 
+func (w *ClientWorkspace) AgentSmallModel() AgentModel {
+	info, err := w.client.GetAgentInfo(context.Background(), w.workspaceID())
+	if err != nil {
+		return AgentModel{}
+	}
+	return AgentModel{
+		CatwalkCfg: info.SmallModel,
+		ModelCfg:   info.SmallModelCfg,
+	}
+}
+
 func (w *ClientWorkspace) AgentIsReady() bool {
 	info, err := w.client.GetAgentInfo(context.Background(), w.workspaceID())
 	if err != nil {

@@ -622,7 +622,7 @@ func (c *Config) SetupAgents() {
 			Name:         "Task",
 			Description:  "An agent that helps with searching for context and finding implementation details.",
 			Role:         AgentRoleSubagent,
-			Model:        SelectedModelTypeLarge,
+			Model:        SelectedModelTypeSmall,
 			Prompt:       "task",
 			ContextPaths: c.Options.ContextPaths,
 			AllowedTools: resolveReadOnlyTools(allowedTools),

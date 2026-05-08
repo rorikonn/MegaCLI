@@ -1,16 +1,15 @@
 package model
 
 import (
-	"cmp"
 	"fmt"
 	"image"
 
 	"charm.land/lipgloss/v2"
+	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/ultraviolet/layout"
 	"github.com/megacli/megacli/internal/ui/common"
 	"github.com/megacli/megacli/internal/ui/logo"
 	"github.com/megacli/megacli/internal/ui/styles"
-	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/charmbracelet/ultraviolet/layout"
 )
 
 // agentInfo renders the current agent indicator for the sidebar.
@@ -36,29 +35,28 @@ func (m *UI) agentInfo(width int) string {
 // settings and context usage/cost for the sidebar.
 func (m *UI) modelInfo(width int) string {
 	model := m.selectedLargeModel()
-	reasoningInfo := ""
+	smallModel := m.selectedSmallModel()
 	providerName := ""
 
+	var largeModelName string
 	if model != nil {
-		// Get provider name first
+		largeModelName = common.ModelDisplayName(model.CatwalkCfg, model.ModelCfg)
+
+		// Get provider name
 		providerConfig, ok := m.com.Config().Providers.Get(model.ModelCfg.Provider)
 		if ok {
 			providerName = providerConfig.Name
-
-			// Only check reasoning if model can reason
-			if model.CatwalkCfg.CanReason {
-				if len(model.CatwalkCfg.ReasoningLevels) == 0 {
-					if model.ModelCfg.Think {
-						reasoningInfo = "Thinking On"
-					} else {
-						reasoningInfo = "Thinking Off"
-					}
-				} else {
-					reasoningEffort := cmp.Or(model.ModelCfg.ReasoningEffort, model.CatwalkCfg.DefaultReasoningEffort)
-					reasoningInfo = fmt.Sprintf("Reasoning %s", common.FormatReasoningEffort(reasoningEffort))
-				}
-			}
 		}
+	}
+
+	var smallModelName string
+	if smallModel != nil {
+		smallModelName = common.ModelDisplayName(smallModel.CatwalkCfg, smallModel.ModelCfg)
+	}
+
+	// Don't show small model line if it's the same as large model.
+	if smallModelName == largeModelName {
+		smallModelName = ""
 	}
 
 	var modelContext *common.ModelContextInfo
@@ -66,18 +64,15 @@ func (m *UI) modelInfo(width int) string {
 		modelContext = &common.ModelContextInfo{
 			ContextUsed:         m.session.PromptTokens,
 			Cost:                m.session.Cost,
-			ModelContext:         model.CatwalkCfg.ContextWindow,
+			ModelContext:        model.CatwalkCfg.ContextWindow,
 			InputTokens:         m.session.InputTokens,
 			OutputTokens:        m.session.OutputTokens,
 			CacheCreationTokens: m.session.CacheCreationTokens,
 			CacheReadTokens:     m.session.CacheReadTokens,
 		}
 	}
-	var modelName string
-	if model != nil {
-		modelName = model.CatwalkCfg.Name
-	}
-	return common.ModelInfo(m.com.Styles, modelName, providerName, reasoningInfo, modelContext, width, m.hyperCredits)
+
+	return common.ModelInfo(m.com.Styles, largeModelName, smallModelName, providerName, modelContext, width, m.hyperCredits)
 }
 
 // getDynamicHeightLimits will give us the num of items to show in each section based on the height

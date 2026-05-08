@@ -30,10 +30,12 @@ type Error struct {
 
 // AgentInfo represents information about the agent.
 type AgentInfo struct {
-	IsBusy   bool                 `json:"is_busy"`
-	IsReady  bool                 `json:"is_ready"`
-	Model    catwalk.Model        `json:"model"`
-	ModelCfg config.SelectedModel `json:"model_cfg"`
+	IsBusy        bool                 `json:"is_busy"`
+	IsReady       bool                 `json:"is_ready"`
+	Model         catwalk.Model        `json:"model"`
+	ModelCfg      config.SelectedModel `json:"model_cfg"`
+	SmallModel    catwalk.Model        `json:"small_model,omitzero"`
+	SmallModelCfg config.SelectedModel `json:"small_model_cfg,omitzero"`
 }
 
 // IsZero checks if the AgentInfo is zero-valued.

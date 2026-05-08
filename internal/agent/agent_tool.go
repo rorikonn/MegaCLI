@@ -131,6 +131,7 @@ func (c *coordinator) agentTool(ctx context.Context) (fantasy.AgentTool, error) 
 				return fantasy.ToolResponse{}, errors.New("agent message id missing from context")
 			}
 
+			agentCfg := c.agentDefs[target]
 			return c.runSubAgent(ctx, subAgentParams{
 				Agent:          agent,
 				SessionID:      sessionID,
@@ -138,6 +139,7 @@ func (c *coordinator) agentTool(ctx context.Context) (fantasy.AgentTool, error) 
 				ToolCallID:     call.ID,
 				Prompt:         params.Prompt,
 				SessionTitle:   "New Agent Session",
+				ModelType:      agentCfg.Model,
 			})
 		}), nil
 }

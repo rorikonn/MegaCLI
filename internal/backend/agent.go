@@ -33,11 +33,14 @@ func (b *Backend) GetAgentInfo(workspaceID string) (proto.AgentInfo, error) {
 	var agentInfo proto.AgentInfo
 	if ws.AgentCoordinator != nil {
 		m := ws.AgentCoordinator.Model()
+		sm := ws.AgentCoordinator.SmallModel()
 		agentInfo = proto.AgentInfo{
-			Model:    m.CatwalkCfg,
-			ModelCfg: m.ModelCfg,
-			IsBusy:   ws.AgentCoordinator.IsBusy(),
-			IsReady:  true,
+			Model:         m.CatwalkCfg,
+			ModelCfg:      m.ModelCfg,
+			SmallModel:    sm.CatwalkCfg,
+			SmallModelCfg: sm.ModelCfg,
+			IsBusy:        ws.AgentCoordinator.IsBusy(),
+			IsReady:       true,
 		}
 	}
 	return agentInfo, nil

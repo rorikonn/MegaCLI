@@ -4,9 +4,9 @@ import (
 	"image"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/ultraviolet/layout"
 	"github.com/megacli/megacli/internal/ui/common"
 	"github.com/megacli/megacli/internal/workspace"
-	"github.com/charmbracelet/ultraviolet/layout"
 )
 
 // selectedLargeModel returns the currently selected large language model from
@@ -14,6 +14,16 @@ import (
 func (m *UI) selectedLargeModel() *workspace.AgentModel {
 	if m.com.Workspace.AgentIsReady() {
 		model := m.com.Workspace.AgentModel()
+		return &model
+	}
+	return nil
+}
+
+// selectedSmallModel returns the currently selected small language model from
+// the agent coordinator, if one exists.
+func (m *UI) selectedSmallModel() *workspace.AgentModel {
+	if m.com.Workspace.AgentIsReady() {
+		model := m.com.Workspace.AgentSmallModel()
 		return &model
 	}
 	return nil
