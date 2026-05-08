@@ -690,7 +690,7 @@ func quickStyle(o quickStyleOpts) Styles {
 		BorderForeground(o.fgSubtle).
 		PaddingLeft(1).PaddingRight(1)
 	s.AskUser.Progress = lipgloss.NewStyle().Foreground(o.fgMoreSubtle)
-	s.AskUser.Question = lipgloss.NewStyle().Foreground(o.info).Bold(true)
+	s.AskUser.Question = lipgloss.NewStyle().Foreground(o.fgBase).Bold(true)
 	s.AskUser.Shortcut = lipgloss.NewStyle().Foreground(o.fgMoreSubtle)
 	s.AskUser.Option = base
 	s.AskUser.Selected = lipgloss.NewStyle().Foreground(o.info)

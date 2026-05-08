@@ -4,11 +4,17 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"charm.land/fantasy"
 	"github.com/megacli/megacli/internal/askuser"
 )
+
+// listPatternRe matches numbered lists (1. / 2) / 3.) or bullet points
+// (- / *) at the start of a line. Used to reject open-ended questions
+// whose content looks like selectable options.
+var listPatternRe = regexp.MustCompile(`(?m)^\s*(\d+[.)]\s|[-*]\s)`)
 
 //go:embed ask_user.md
 var askUserDescription []byte
@@ -35,6 +41,12 @@ func NewAskUserTool(svc askuser.Service) fantasy.AgentTool {
 				}
 				if len(q.Options) > 10 {
 					return fantasy.NewTextErrorResponse(fmt.Sprintf("question %d has more than 10 options", i+1)), nil
+				}
+				if len(q.Options) == 0 && listPatternRe.MatchString(q.Content) {
+					return fantasy.NewTextErrorResponse(fmt.Sprintf(
+						"question %d: open-ended questions must not contain numbered or bulleted lists "+
+							"in their content — split them into separate Question objects instead", i+1,
+					)), nil
 				}
 			}
 

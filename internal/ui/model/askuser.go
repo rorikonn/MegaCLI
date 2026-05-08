@@ -118,16 +118,18 @@ func renderAskUserPanel(sty *styles.Styles, s *askUserState, width int) string {
 
 	if len(q.Options) > 0 {
 		for i, opt := range q.Options {
-			prefix := "  "
+			var icon string
 			if i == s.highlight {
-				prefix = as.Selected.Render("› ")
+				icon = as.Selected.Render("● ")
+			} else {
+				icon = as.Shortcut.Render("○ ")
 			}
 			num := as.Shortcut.Render(fmt.Sprintf("%d.", i+1))
 			optText := as.Option.Render(opt)
 			if i == s.highlight {
 				optText = as.Selected.Render(opt)
 			}
-			inner = append(inner, fmt.Sprintf("%s%s %s", prefix, num, optText))
+			inner = append(inner, fmt.Sprintf("%s%s %s", icon, num, optText))
 		}
 	}
 
@@ -136,7 +138,17 @@ func renderAskUserPanel(sty *styles.Styles, s *askUserState, width int) string {
 	return as.Border.Width(panelWidth).Render(content)
 }
 
-const askUserPlaceholder = "Type custom answer or use ↑↓ to select, Enter to confirm"
+const (
+	askUserPlaceholderWithOptions = "Type custom answer or use ↑↓ to select, Enter to confirm"
+	askUserPlaceholderOpenEnded   = "Type your answer, Enter to confirm"
+)
+
+func askUserPlaceholderForQuestion(q askuser.Question) string {
+	if len(q.Options) > 0 {
+		return askUserPlaceholderWithOptions
+	}
+	return askUserPlaceholderOpenEnded
+}
 
 // enterAskMode activates ask mode on the UI and forces focus to the
 // editor so that digit/arrow shortcuts reach handleAskUserKeyPress.
@@ -145,7 +157,7 @@ func (m *UI) enterAskMode(req askuser.AskUserRequest) {
 		return
 	}
 	m.askUser = newAskUserState(req, m.textarea.Placeholder)
-	m.textarea.Placeholder = askUserPlaceholder
+	m.textarea.Placeholder = askUserPlaceholderForQuestion(req.Questions[0])
 	m.textarea.Reset()
 
 	if m.focus != uiFocusEditor {
@@ -205,6 +217,9 @@ func (m *UI) advanceAskUser() {
 	if next >= 0 {
 		m.askUser.current = next
 		m.askUser.highlight = 0
+		m.textarea.Placeholder = askUserPlaceholderForQuestion(
+			m.askUser.request.Questions[next],
+		)
 	}
 	m.textarea.Reset()
 }
@@ -281,6 +296,9 @@ func (m *UI) handleAskUserKeyPress(msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		if m.askUser.current > 0 {
 			m.askUser.current--
 			m.askUser.highlight = 0
+			m.textarea.Placeholder = askUserPlaceholderForQuestion(
+				m.askUser.request.Questions[m.askUser.current],
+			)
 			m.textarea.Reset()
 		}
 		return true, nil
@@ -290,6 +308,9 @@ func (m *UI) handleAskUserKeyPress(msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		if m.askUser.current < len(m.askUser.request.Questions)-1 {
 			m.askUser.current++
 			m.askUser.highlight = 0
+			m.textarea.Placeholder = askUserPlaceholderForQuestion(
+				m.askUser.request.Questions[m.askUser.current],
+			)
 			m.textarea.Reset()
 		}
 		return true, nil
