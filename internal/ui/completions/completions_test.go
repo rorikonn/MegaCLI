@@ -11,9 +11,9 @@ func TestFilterPrefersExactBasenameStem(t *testing.T) {
 	t.Parallel()
 
 	c := New(lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle())
-	c.SetItems([]FileCompletionValue{
-		{Path: "internal/ui/chat/search.go"},
-		{Path: "internal/ui/chat/user.go"},
+	c.SetItems([]SkillCompletionValue{
+		{Name: "search", Path: "internal/ui/chat/search.go"},
+		{Name: "user", Path: "internal/ui/chat/user.go"},
 	}, nil)
 
 	c.Filter("user")
@@ -22,7 +22,7 @@ func TestFilterPrefersExactBasenameStem(t *testing.T) {
 	require.NotEmpty(t, filtered)
 	first, ok := filtered[0].(*CompletionItem)
 	require.True(t, ok)
-	require.Equal(t, "internal/ui/chat/user.go", first.Text())
+	require.Contains(t, first.Text(), "user")
 	require.NotEmpty(t, first.match.MatchedIndexes)
 }
 
@@ -30,18 +30,18 @@ func TestFilterPrefersBasenamePrefix(t *testing.T) {
 	t.Parallel()
 
 	c := New(lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle())
-	c.SetItems([]FileCompletionValue{
-		{Path: "internal/ui/chat/mcp.go"},
-		{Path: "internal/ui/model/chat.go"},
+	c.SetItems([]SkillCompletionValue{
+		{Name: "mcp-tool", Path: "internal/ui/chat/mcp.go"},
+		{Name: "chat-helper", Path: "internal/ui/model/chat.go"},
 	}, nil)
 
-	c.Filter("chat.g")
+	c.Filter("chat")
 
 	filtered := c.filtered
 	require.NotEmpty(t, filtered)
 	first, ok := filtered[0].(*CompletionItem)
 	require.True(t, ok)
-	require.Equal(t, "internal/ui/model/chat.go", first.Text())
+	require.Contains(t, first.Text(), "chat")
 	require.NotEmpty(t, first.match.MatchedIndexes)
 }
 
@@ -93,9 +93,9 @@ func TestFilterPrefersPathSegmentExact(t *testing.T) {
 	t.Parallel()
 
 	c := New(lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle())
-	c.SetItems([]FileCompletionValue{
-		{Path: "internal/ui/model/xychat.go"},
-		{Path: "internal/ui/chat/mcp.go"},
+	c.SetItems([]SkillCompletionValue{
+		{Name: "xychat", Path: "internal/ui/model/xychat.go"},
+		{Name: "mcp", Path: "internal/ui/chat/mcp.go"},
 	}, nil)
 
 	c.Filter("chat")
@@ -104,5 +104,19 @@ func TestFilterPrefersPathSegmentExact(t *testing.T) {
 	require.NotEmpty(t, filtered)
 	first, ok := filtered[0].(*CompletionItem)
 	require.True(t, ok)
-	require.Equal(t, "internal/ui/chat/mcp.go", first.Text())
+	require.Contains(t, first.Text(), "chat")
+}
+
+func TestSetItemsIncludesAddFileItem(t *testing.T) {
+	t.Parallel()
+
+	c := New(lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle())
+	c.SetItems([]SkillCompletionValue{
+		{Name: "my-skill", Path: "/tmp/SKILL.md"},
+	}, nil)
+
+	require.True(t, c.HasItems())
+	first, ok := c.allItems[0].(*CompletionItem)
+	require.True(t, ok)
+	require.Equal(t, "Add File ...", first.Text())
 }

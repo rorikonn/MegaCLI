@@ -59,6 +59,7 @@ import (
 	"github.com/megacli/megacli/internal/ui/instances"
 	"github.com/megacli/megacli/internal/ui/logo"
 	"github.com/megacli/megacli/internal/ui/notification"
+	"github.com/megacli/megacli/internal/ui/slashcompletions"
 	"github.com/megacli/megacli/internal/ui/styles"
 	"github.com/megacli/megacli/internal/ui/util"
 	"github.com/megacli/megacli/internal/version"
@@ -214,12 +215,17 @@ type UI struct {
 
 	readyPlaceholder string
 
-	// Completions state
+	// Completions state (@)
 	completions              *completions.Completions
 	completionsOpen          bool
 	completionsStartIndex    int
 	completionsQuery         string
 	completionsPositionStart image.Point // x,y where user typed '@'
+
+	// Slash completions state (/)
+	slashCompletions      *slashcompletions.SlashCompletions
+	slashCompletionsOpen  bool
+	slashCompletionsQuery string
 
 	// Chat components
 	chat *Chat
@@ -339,6 +345,13 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 		com.Styles.Completions.Match,
 	)
 
+	// Slash completions component
+	slashComp := slashcompletions.New(
+		com.Styles.Completions.Normal,
+		com.Styles.Completions.Focused,
+		com.Styles.Completions.Match,
+	)
+
 	todoSpinner := spinner.New(
 		spinner.WithSpinner(spinner.MiniDot),
 		spinner.WithStyle(com.Styles.Pills.TodoSpinner),
@@ -378,6 +391,7 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 		chat:                ch,
 		header:              header,
 		completions:         comp,
+		slashCompletions:    slashComp,
 		attachments:         attachments,
 		todoSpinner:         todoSpinner,
 		agentSpinner:        agentSpinner,
@@ -1032,7 +1046,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case completions.CompletionItemsLoadedMsg:
 		if m.completionsOpen {
-			m.completions.SetItems(msg.Files, msg.Resources)
+			m.completions.SetItems(msg.Skills, msg.MCPs)
 		}
 	case uv.KittyGraphicsEvent:
 		if !bytes.HasPrefix(msg.Payload, []byte("OK")) {
@@ -2043,10 +2057,51 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 	case uiChat, uiLanding:
 		switch m.focus {
 		case uiFocusEditor:
-			// Handle completions if open.
+			// Handle slash completions if open.
+			if m.slashCompletionsOpen {
+				keyStr := msg.String()
+				switch keyStr {
+				case "enter", "tab":
+					action := m.slashCompletions.Select()
+					m.closeSlashCompletions()
+					m.textarea.SetValue("")
+					if action != nil {
+						cmds = append(cmds, m.handleSlashAction(action))
+					}
+					return tea.Batch(cmds...)
+				case "up":
+					m.slashCompletions.MoveUp()
+					return tea.Batch(cmds...)
+				case "down":
+					m.slashCompletions.MoveDown()
+					return tea.Batch(cmds...)
+				case "esc":
+					m.closeSlashCompletions()
+					m.textarea.SetValue("")
+					return tea.Batch(cmds...)
+				}
+			}
+
+			// Handle @ completions if open.
 			if m.completionsOpen {
 				if msg, ok := m.completions.Update(msg); ok {
 					switch msg := msg.(type) {
+					case completions.SelectionMsg[completions.AddFileCompletionValue]:
+						m.removeCompletionTriggerText()
+						m.closeCompletions()
+						if cmd := m.openFilesDialog(); cmd != nil {
+							cmds = append(cmds, cmd)
+						}
+					case completions.SelectionMsg[completions.MCPCompletionValue]:
+						cmds = append(cmds, m.insertMCPServerCompletion(msg.Value))
+						if !msg.KeepOpen {
+							m.closeCompletions()
+						}
+					case completions.SelectionMsg[completions.SkillCompletionValue]:
+						cmds = append(cmds, m.insertSkillCompletion(msg.Value))
+						if !msg.KeepOpen {
+							m.closeCompletions()
+						}
 					case completions.SelectionMsg[completions.FileCompletionValue]:
 						cmds = append(cmds, m.insertFileCompletion(msg.Value.Path))
 						if !msg.KeepOpen {
@@ -2176,9 +2231,9 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 					cmds = append(cmds, cmd)
 				}
 			case key.Matches(msg, m.keyMap.Editor.Commands) && m.textarea.Value() == "":
-				if cmd := m.openCommandsDialog(); cmd != nil {
-					cmds = append(cmds, cmd)
-				}
+				m.openSlashCompletions()
+				prevHeight := m.textarea.Height()
+				cmds = append(cmds, m.updateTextareaWithPrevHeight(msg, prevHeight))
 			default:
 				if handleGlobalKeys(msg) {
 					// Handle global keys first before passing to textarea.
@@ -2197,8 +2252,14 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 						m.completionsQuery = ""
 						m.completionsStartIndex = curIdx
 						m.completionsPositionStart = m.completionsPosition()
-						depth, limit := m.com.Config().Options.TUI.Completions.Limits()
-						cmds = append(cmds, m.completions.Open(depth, limit))
+						cfg := m.com.Config()
+						var skillsPaths []string
+						var disabledSkills []string
+						if cfg.Options != nil {
+							skillsPaths = cfg.Options.SkillsPaths
+							disabledSkills = cfg.Options.DisabledSkills
+						}
+						cmds = append(cmds, m.completions.Open(skillsPaths, disabledSkills))
 					}
 				}
 
@@ -2207,6 +2268,17 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 
 				// Any text modification becomes the current draft.
 				m.updateHistoryDraft(curValue)
+
+				// Filter slash completions based on text after '/'.
+				if m.slashCompletionsOpen {
+					newValue := m.textarea.Value()
+					if strings.HasPrefix(newValue, "/") {
+						m.slashCompletionsQuery = newValue[1:]
+						m.slashCompletions.Filter(m.slashCompletionsQuery)
+					} else {
+						m.closeSlashCompletions()
+					}
+				}
 
 				// After updating textarea, check if we need to filter completions.
 				// Skip filtering on the initial @ keystroke since items are loading async.
@@ -2400,7 +2472,7 @@ func (m *UI) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	m.status.SetHideHelp(isOnboarding)
 	m.status.Draw(scr, layout.status)
 
-	// Draw completions popup if open
+	// Draw @ completions popup if open (above cursor).
 	if !isOnboarding && m.completionsOpen && m.completions.HasItems() {
 		w, h := m.completions.Size()
 		x := m.completionsPositionStart.X
@@ -2415,6 +2487,27 @@ func (m *UI) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 
 		completionsView := uv.NewStyledString(m.completions.Render())
 		completionsView.Draw(scr, image.Rectangle{
+			Min: image.Pt(x, y),
+			Max: image.Pt(x+w, y+h),
+		})
+	}
+
+	// Draw slash completions popup if open (above cursor).
+	if !isOnboarding && m.slashCompletionsOpen && m.slashCompletions.HasItems() {
+		w, h := m.slashCompletions.Size()
+		pos := m.completionsPosition()
+		x := pos.X
+		y := pos.Y - h
+
+		screenW := area.Dx()
+		if x+w > screenW {
+			x = screenW - w
+		}
+		x = max(0, x)
+		y = max(0, y)
+
+		slashView := uv.NewStyledString(m.slashCompletions.Render())
+		slashView.Draw(scr, image.Rectangle{
 			Min: image.Pt(x, y),
 			Max: image.Pt(x+w, y+h),
 		})
@@ -3123,6 +3216,207 @@ func (m *UI) closeCompletions() {
 	m.completions.Close()
 }
 
+// openSlashCompletions builds and opens the slash completions popup.
+func (m *UI) openSlashCompletions() {
+	items := m.buildSlashItems()
+	m.slashCompletions.Open(items)
+	m.slashCompletionsOpen = true
+	m.slashCompletionsQuery = ""
+}
+
+// closeSlashCompletions closes the slash completions popup and clears state.
+func (m *UI) closeSlashCompletions() {
+	m.slashCompletionsOpen = false
+	m.slashCompletionsQuery = ""
+	m.slashCompletions.Close()
+}
+
+// buildSlashItems constructs the list of slash completion items from system
+// commands, agents, and thinking mode levels.
+func (m *UI) buildSlashItems() []*slashcompletions.SlashItem {
+	normal := m.com.Styles.Completions.Normal
+	focused := m.com.Styles.Completions.Focused
+	match := m.com.Styles.Completions.Match
+
+	var items []*slashcompletions.SlashItem
+
+	// System commands.
+	items = append(items,
+		slashcompletions.NewSlashItem("New Session", dialog.ActionNewSession{}, normal, focused, match),
+		slashcompletions.NewSlashItem("Switch Model", dialog.ActionOpenDialog{DialogID: dialog.ModelsID}, normal, focused, match),
+		slashcompletions.NewSlashItem("Switch Agent", dialog.ActionOpenDialog{DialogID: dialog.AgentsID}, normal, focused, match),
+	)
+
+	if m.hasSession() {
+		items = append(items,
+			slashcompletions.NewSlashItem("Summarize Session", dialog.ActionSummarize{SessionID: m.session.ID}, normal, focused, match),
+			slashcompletions.NewSlashItem("Review Changes", dialog.ActionOpenDialog{DialogID: dialog.ReviewID}, normal, focused, match),
+		)
+	}
+
+	items = append(items,
+		slashcompletions.NewSlashItem("Toggle Yolo Mode", dialog.ActionToggleYoloMode{}, normal, focused, match),
+		slashcompletions.NewSlashItem("Toggle Help", dialog.ActionToggleHelp{}, normal, focused, match),
+	)
+
+	// Agents.
+	for _, agentID := range m.com.Workspace.AgentAvailable() {
+		label := agentID + " (Agent)"
+		items = append(items, slashcompletions.NewSlashItem(
+			label, dialog.ActionSwitchAgent{AgentID: agentID}, normal, focused, match,
+		))
+	}
+
+	// Thinking / reasoning modes.
+	cfg := m.com.Config()
+	if agentCfg, ok := cfg.Agents[config.AgentCoder]; ok {
+		model := cfg.GetModelByType(agentCfg.Model)
+		if model != nil && model.CanReason {
+			providerCfg := cfg.GetProviderForModel(agentCfg.Model)
+			isAnthropic := providerCfg != nil &&
+				(providerCfg.Type == "anthropic" || providerCfg.Type == "bedrock" || providerCfg.Type == "google-vertex")
+
+			var options []string
+			if isAnthropic {
+				if len(model.ReasoningLevels) > 0 {
+					options = append([]string{"none"}, model.ReasoningLevels...)
+				} else {
+					options = []string{"none", "on"}
+				}
+			} else if len(model.ReasoningLevels) > 0 {
+				options = model.ReasoningLevels
+			}
+
+			for _, effort := range options {
+				label := "Thinking " + formatThinkingLabel(effort)
+				items = append(items, slashcompletions.NewSlashItem(
+					label, dialog.ActionSelectReasoningEffort{Effort: effort}, normal, focused, match,
+				))
+			}
+		}
+	}
+
+	return items
+}
+
+// formatThinkingLabel converts a reasoning effort string to a display label.
+func formatThinkingLabel(effort string) string {
+	switch effort {
+	case "", "none":
+		return "off"
+	case "on":
+		return "on"
+	default:
+		return effort
+	}
+}
+
+// handleSlashAction dispatches the action from a slash completion selection
+// by directly invoking the same logic the Update switch uses.
+func (m *UI) handleSlashAction(action any) tea.Cmd {
+	switch action := action.(type) {
+	case dialog.ActionNewSession:
+		_ = action
+		if m.isAgentBusy() {
+			return util.ReportWarn("Agent is busy, please wait before starting a new session...")
+		}
+		return m.newSession()
+	case dialog.ActionOpenDialog:
+		return m.openDialog(action.DialogID)
+	case dialog.ActionSwitchAgent:
+		m.agentExplicitlySet = true
+		if m.session != nil {
+			m.session.ActiveAgent = action.AgentID
+			if err := m.com.Workspace.UpdateSessionActiveAgent(
+				context.Background(), m.session.ID, action.AgentID); err != nil {
+				slog.Error("Failed to persist active agent to session", "error", err)
+			}
+		}
+		return func() tea.Msg {
+			ctx := context.Background()
+			deferred, err := m.com.Workspace.AgentSwitch(ctx, action.AgentID)
+			if err != nil {
+				return util.ReportError(err)()
+			}
+			if deferred {
+				return util.InfoMsg{Type: util.InfoTypeInfo, Msg: "Agent switch will take effect after current task completes."}
+			}
+			return nil
+		}
+	case dialog.ActionSelectReasoningEffort:
+		if m.isAgentBusy() {
+			return util.ReportWarn("Agent is busy, please wait...")
+		}
+		cfg := m.com.Config()
+		if cfg == nil {
+			return nil
+		}
+		agentCfg, ok := cfg.Agents[config.AgentCoder]
+		if !ok {
+			return nil
+		}
+		currentModel := cfg.Models[agentCfg.Model]
+		currentModel.ReasoningEffort = action.Effort
+		providerCfg := cfg.GetProviderForModel(agentCfg.Model)
+		if providerCfg != nil {
+			switch providerCfg.Type {
+			case "anthropic", "bedrock", "google-vertex":
+				currentModel.Think = action.Effort != "" && action.Effort != "none"
+			case "openai-compat":
+				currentModel.Think = action.Effort != "" && action.Effort != "none"
+			}
+		}
+		effort := action.Effort
+		if err := m.com.Workspace.UpdatePreferredModel(config.ScopeGlobal, agentCfg.Model, currentModel); err != nil {
+			return util.ReportError(err)
+		}
+		return func() tea.Msg {
+			m.com.Workspace.UpdateAgentModel(context.TODO())
+			statusMsg := "Reasoning mode set to Off"
+			if effort != "" && effort != "none" {
+				statusMsg = "Reasoning mode set to " + effort
+			}
+			return util.NewInfoMsg(statusMsg)
+		}
+	case dialog.ActionToggleYoloMode:
+		yolo := !m.com.Workspace.PermissionSkipRequests()
+		m.com.Workspace.PermissionSetSkipRequests(yolo)
+		m.setEditorPrompt(yolo)
+		return nil
+	case dialog.ActionToggleHelp:
+		m.status.ToggleHelp()
+		return nil
+	case dialog.ActionSummarize:
+		if m.isAgentBusy() {
+			return util.ReportWarn("Agent is busy, please wait before summarizing session...")
+		}
+		return func() tea.Msg {
+			err := m.com.Workspace.AgentSummarize(context.Background(), action.SessionID)
+			if err != nil {
+				return util.ReportError(err)()
+			}
+			return nil
+		}
+	default:
+		return func() tea.Msg { return action }
+	}
+}
+
+// removeCompletionTriggerText removes the @query text from the textarea
+// without inserting replacement text.
+func (m *UI) removeCompletionTriggerText() {
+	value := m.textarea.Value()
+	if m.completionsStartIndex > len(value) {
+		return
+	}
+	word := m.textareaWord()
+	endIdx := min(m.completionsStartIndex+len(word), len(value))
+	newValue := value[:m.completionsStartIndex] + value[endIdx:]
+	newValue = strings.TrimRight(newValue, " ")
+	m.textarea.SetValue(newValue)
+	m.textarea.MoveToEnd()
+}
+
 // insertCompletionText replaces the @query in the textarea with the given text.
 // Returns false if the replacement cannot be performed.
 func (m *UI) insertCompletionText(text string) bool {
@@ -3235,6 +3529,84 @@ func (m *UI) insertMCPResourceCompletion(item completions.ResourceCompletionValu
 		}
 	}
 	return tea.Batch(heightCmd, resourceCmd)
+}
+
+// insertMCPServerCompletion inserts the selected MCP server name into the
+// textarea, replacing the @query, and reads all its resources as attachments.
+func (m *UI) insertMCPServerCompletion(item completions.MCPCompletionValue) tea.Cmd {
+	displayText := item.Name
+
+	prevHeight := m.textarea.Height()
+	if !m.insertCompletionText(displayText) {
+		return nil
+	}
+	heightCmd := m.handleTextareaHeightChange(prevHeight)
+
+	resourceCmd := func() tea.Msg {
+		var allData []byte
+		for mcpName, resources := range mcp.Resources() {
+			if mcpName != item.Name {
+				continue
+			}
+			for _, r := range resources {
+				contents, err := m.com.Workspace.ReadMCPResource(
+					context.Background(), item.Name, r.URI,
+				)
+				if err != nil {
+					continue
+				}
+				for _, c := range contents {
+					if c.Text != "" {
+						allData = append(allData, []byte(c.Text)...)
+						allData = append(allData, '\n')
+					} else if len(c.Blob) > 0 {
+						allData = append(allData, c.Blob...)
+						allData = append(allData, '\n')
+					}
+				}
+			}
+		}
+		if len(allData) == 0 {
+			return nil
+		}
+		return message.Attachment{
+			FilePath: "mcp://" + item.Name,
+			FileName: item.Name + " (MCP)",
+			MimeType: "text/plain",
+			Content:  allData,
+		}
+	}
+	return tea.Batch(heightCmd, resourceCmd)
+}
+
+// insertSkillCompletion inserts the selected skill name into the textarea,
+// replacing the @query, and reads the SKILL.md as an attachment.
+func (m *UI) insertSkillCompletion(item completions.SkillCompletionValue) tea.Cmd {
+	displayText := item.Name
+
+	prevHeight := m.textarea.Height()
+	if !m.insertCompletionText(displayText) {
+		return nil
+	}
+	heightCmd := m.handleTextareaHeightChange(prevHeight)
+
+	skillCmd := func() tea.Msg {
+		content, err := os.ReadFile(item.Path)
+		if err != nil {
+			slog.Warn("Failed to read skill file", "path", item.Path, "error", err)
+			return nil
+		}
+		if len(content) == 0 {
+			return nil
+		}
+		return message.Attachment{
+			FilePath: item.Path,
+			FileName: item.Name + " (Skill)",
+			MimeType: "text/markdown",
+			Content:  content,
+		}
+	}
+	return tea.Batch(heightCmd, skillCmd)
 }
 
 // completionsPosition returns the X and Y position for the completions popup.

@@ -2,8 +2,8 @@ package completions
 
 import (
 	"charm.land/lipgloss/v2"
-	"github.com/megacli/megacli/internal/ui/list"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/megacli/megacli/internal/ui/list"
 	"github.com/rivo/uniseg"
 	"github.com/sahilm/fuzzy"
 )
@@ -19,6 +19,20 @@ type ResourceCompletionValue struct {
 	URI      string
 	Title    string
 	MIMEType string
+}
+
+// AddFileCompletionValue represents the "Add File ..." action item.
+type AddFileCompletionValue struct{}
+
+// SkillCompletionValue represents a skill completion value.
+type SkillCompletionValue struct {
+	Name string
+	Path string
+}
+
+// MCPCompletionValue represents an MCP server completion value.
+type MCPCompletionValue struct {
+	Name string
 }
 
 // CompletionItem represents an item in the completions list.

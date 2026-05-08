@@ -1,7 +1,6 @@
 package completions
 
 import (
-	"cmp"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -10,11 +9,11 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/megacli/megacli/internal/agent/tools/mcp"
-	"github.com/megacli/megacli/internal/fsext"
-	"github.com/megacli/megacli/internal/ui/list"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/ordered"
+	"github.com/megacli/megacli/internal/agent/tools/mcp"
+	"github.com/megacli/megacli/internal/skills"
+	"github.com/megacli/megacli/internal/ui/list"
 )
 
 const (
@@ -38,10 +37,10 @@ type SelectionMsg[T any] struct {
 // ClosedMsg is sent when the completions are closed.
 type ClosedMsg struct{}
 
-// CompletionItemsLoadedMsg is sent when files have been loaded for completions.
+// CompletionItemsLoadedMsg is sent when items have been loaded for completions.
 type CompletionItemsLoadedMsg struct {
-	Files     []FileCompletionValue
-	Resources []ResourceCompletionValue
+	Skills []SkillCompletionValue
+	MCPs   []MCPCompletionValue
 }
 
 // Completions represents the completions popup component.
@@ -140,48 +139,56 @@ func (c *Completions) KeyMap() KeyMap {
 	return c.keyMap
 }
 
-// Open opens the completions with file items from the filesystem.
-func (c *Completions) Open(depth, limit int) tea.Cmd {
+// Open opens the completions by loading skills and MCP server names.
+func (c *Completions) Open(skillsPaths []string, disabledSkills []string) tea.Cmd {
 	return func() tea.Msg {
 		var msg CompletionItemsLoadedMsg
 		var wg sync.WaitGroup
 		wg.Go(func() {
-			msg.Files = loadFiles(depth, limit)
+			msg.Skills = loadSkills(skillsPaths, disabledSkills)
 		})
 		wg.Go(func() {
-			msg.Resources = loadMCPResources()
+			msg.MCPs = loadMCPServers()
 		})
 		wg.Wait()
 		return msg
 	}
 }
 
-// SetItems sets the files and MCP resources and rebuilds the merged list.
-func (c *Completions) SetItems(files []FileCompletionValue, resources []ResourceCompletionValue) {
-	items := make([]list.FilterableItem, 0, len(files)+len(resources))
+// SetItems builds the completions list from skills and MCP servers, plus the
+// fixed "Add File ..." entry.
+func (c *Completions) SetItems(sk []SkillCompletionValue, mcps []MCPCompletionValue) {
+	items := make([]list.FilterableItem, 0, 1+len(sk)+len(mcps))
 
-	// Add files first.
-	for _, file := range files {
-		item := NewCompletionItem(
-			file.Path,
-			file,
+	// Fixed "Add File ..." item always first.
+	items = append(items, NewCompletionItem(
+		"Add File ...",
+		AddFileCompletionValue{},
+		c.normalStyle,
+		c.focusedStyle,
+		c.matchStyle,
+	))
+
+	// MCP servers.
+	for _, m := range mcps {
+		items = append(items, NewCompletionItem(
+			m.Name+" (MCP)",
+			m,
 			c.normalStyle,
 			c.focusedStyle,
 			c.matchStyle,
-		)
-		items = append(items, item)
+		))
 	}
 
-	// Add MCP resources.
-	for _, resource := range resources {
-		item := NewCompletionItem(
-			resource.MCPName+"/"+cmp.Or(resource.Title, resource.URI),
-			resource,
+	// Skills.
+	for _, s := range sk {
+		items = append(items, NewCompletionItem(
+			s.Name+" (Skill)",
+			s,
 			c.normalStyle,
 			c.focusedStyle,
 			c.matchStyle,
-		)
-		items = append(items, item)
+		))
 	}
 
 	c.open = true
@@ -375,6 +382,21 @@ func (c *Completions) selectCurrent(keepOpen bool) tea.Msg {
 	}
 
 	switch item := item.Value().(type) {
+	case AddFileCompletionValue:
+		return SelectionMsg[AddFileCompletionValue]{
+			Value:    item,
+			KeepOpen: keepOpen,
+		}
+	case MCPCompletionValue:
+		return SelectionMsg[MCPCompletionValue]{
+			Value:    item,
+			KeepOpen: keepOpen,
+		}
+	case SkillCompletionValue:
+		return SelectionMsg[SkillCompletionValue]{
+			Value:    item,
+			KeepOpen: keepOpen,
+		}
 	case ResourceCompletionValue:
 		return SelectionMsg[ResourceCompletionValue]{
 			Value:    item,
@@ -404,29 +426,38 @@ func (c *Completions) Render() string {
 	return c.list.List.Render()
 }
 
-func loadFiles(depth, limit int) []FileCompletionValue {
-	files, _, _ := fsext.ListDirectory(".", nil, depth, limit)
-	slices.Sort(files)
-	result := make([]FileCompletionValue, 0, len(files))
-	for _, file := range files {
-		result = append(result, FileCompletionValue{
-			Path: strings.TrimPrefix(file, "./"),
+func loadSkills(paths []string, disabled []string) []SkillCompletionValue {
+	discovered := skills.Discover(paths)
+	builtins := skills.DiscoverBuiltin()
+	all := append(discovered, builtins...)
+	all = skills.Deduplicate(all)
+	all = skills.Filter(all, disabled)
+
+	result := make([]SkillCompletionValue, 0, len(all))
+	for _, s := range all {
+		result = append(result, SkillCompletionValue{
+			Name: s.Name,
+			Path: s.SkillFilePath,
 		})
 	}
+	slices.SortFunc(result, func(a, b SkillCompletionValue) int {
+		return strings.Compare(a.Name, b.Name)
+	})
 	return result
 }
 
-func loadMCPResources() []ResourceCompletionValue {
-	var resources []ResourceCompletionValue
-	for mcpName, mcpResources := range mcp.Resources() {
-		for _, r := range mcpResources {
-			resources = append(resources, ResourceCompletionValue{
-				MCPName:  mcpName,
-				URI:      r.URI,
-				Title:    r.Name,
-				MIMEType: r.MIMEType,
-			})
+func loadMCPServers() []MCPCompletionValue {
+	seen := make(map[string]bool)
+	var result []MCPCompletionValue
+	for name := range mcp.Resources() {
+		if seen[name] {
+			continue
 		}
+		seen[name] = true
+		result = append(result, MCPCompletionValue{Name: name})
 	}
-	return resources
+	slices.SortFunc(result, func(a, b MCPCompletionValue) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+	return result
 }
