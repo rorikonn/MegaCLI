@@ -16,6 +16,12 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 )
 
+// isAdvancedModel returns true if the model ID is in the provider's
+// advanced models list.
+func isAdvancedModel(providerCfg config.ProviderConfig, modelID string) bool {
+	return slices.Contains(providerCfg.AdvancedModels, modelID)
+}
+
 // ModelType represents the type of model to select.
 type ModelType int
 
@@ -78,6 +84,7 @@ type Models struct {
 
 	modelType ModelType
 	providers []catwalk.Provider
+	showAll   bool
 
 	keyMap struct {
 		Tab      key.Binding
@@ -87,6 +94,7 @@ type Models struct {
 		Next     key.Binding
 		Previous key.Binding
 		Close    key.Binding
+		ShowAll  key.Binding
 	}
 	list  *ModelsList
 	input textinput.Model
@@ -141,6 +149,10 @@ func NewModels(com *common.Common, isOnboarding bool) (*Models, error) {
 		key.WithHelp("↑", "previous item"),
 	)
 	m.keyMap.Close = CloseKey
+	m.keyMap.ShowAll = key.NewBinding(
+		key.WithKeys("ctrl+g"),
+		key.WithHelp("ctrl+g", "show all"),
+	)
 
 	var err error
 	m.providers, err = config.Providers(m.com.Config())
@@ -201,6 +213,11 @@ func (m *Models) HandleMsg(msg tea.Msg) Action {
 				Model:          modelItem.SelectedModel(),
 				ModelType:      modelItem.SelectedModelType(),
 				ReAuthenticate: isEdit,
+			}
+		case key.Matches(msg, m.keyMap.ShowAll):
+			m.showAll = !m.showAll
+			if err := m.setProviderItems(); err != nil {
+				return util.ReportError(err)
 			}
 		case key.Matches(msg, m.keyMap.Tab):
 			if m.isOnboarding {
@@ -312,6 +329,7 @@ func (m *Models) ShortHelp() []key.Binding {
 	h := []key.Binding{
 		m.keyMap.UpDown,
 		m.keyMap.Tab,
+		m.keyMap.ShowAll,
 		m.keyMap.Select,
 	}
 	if m.isSelectedConfigured() {
@@ -385,6 +403,9 @@ func (m *Models) setProviderItems() error {
 
 			group := NewModelGroup(t, name, true)
 			for _, model := range p.Models {
+				if !m.showAll && isAdvancedModel(p, model.ID) {
+					continue
+				}
 				item := NewModelItem(t, provider, model, m.modelType, false)
 				group.AppendItems(item)
 				itemsMap[item.ID()] = item
@@ -450,6 +471,9 @@ func (m *Models) setProviderItems() error {
 
 		group := NewModelGroup(t, name, providerConfigured)
 		for _, model := range displayProvider.Models {
+			if !m.showAll && providerConfigured && isAdvancedModel(providerConfig, model.ID) {
+				continue
+			}
 			item := NewModelItem(t, provider, model, m.modelType, false)
 			group.AppendItems(item)
 			itemsMap[item.ID()] = item

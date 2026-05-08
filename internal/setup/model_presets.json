@@ -1,0 +1,683 @@
+{
+  "provider_order": ["athenai-openai-compat", "athenai"],
+  "providers": {
+    "athenai": {
+      "models": [
+        {
+          "id": "claude-opus-4-7",
+          "name": "claude-opus-4-7",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["low", "medium", "high", "xhigh", "max"],
+          "default_reasoning_effort": "high",
+          "supports_attachments": true
+        },
+        {
+          "id": "claude-opus-4-6",
+          "name": "claude-opus-4-6",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["low", "medium", "high", "max"],
+          "default_reasoning_effort": "high",
+          "supports_attachments": true
+        },
+        {
+          "id": "claude-sonnet-4-6",
+          "name": "claude-sonnet-4-6",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["low", "medium", "high", "max"],
+          "default_reasoning_effort": "high",
+          "supports_attachments": true
+        },
+        {
+          "id": "claude-haiku-4-5-20251001",
+          "name": "claude-haiku-4-5-20251001",
+          "context_window": 200000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "aws/claude-opus-4-7",
+          "name": "aws/claude-opus-4-7",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["low", "medium", "high", "xhigh", "max"],
+          "default_reasoning_effort": "high",
+          "supports_attachments": true
+        },
+        {
+          "id": "aws/claude-opus-4-6",
+          "name": "aws/claude-opus-4-6",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["low", "medium", "high", "max"],
+          "default_reasoning_effort": "high",
+          "supports_attachments": true
+        },
+        {
+          "id": "aws/claude-sonnet-4-6",
+          "name": "aws/claude-sonnet-4-6",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["low", "medium", "high", "max"],
+          "default_reasoning_effort": "high",
+          "supports_attachments": true
+        },
+        {
+          "id": "aws/claude-haiku-4-5-20251001",
+          "name": "aws/claude-haiku-4-5-20251001",
+          "context_window": 200000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "zenlayer/claude-opus-4-7",
+          "name": "zenlayer/claude-opus-4-7",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["low", "medium", "high", "xhigh", "max"],
+          "default_reasoning_effort": "high",
+          "supports_attachments": true
+        },
+        {
+          "id": "zenlayer/claude-opus-4-6",
+          "name": "zenlayer/claude-opus-4-6",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["low", "medium", "high", "max"],
+          "default_reasoning_effort": "high",
+          "supports_attachments": true
+        },
+        {
+          "id": "zenlayer/claude-sonnet-4-6",
+          "name": "zenlayer/claude-sonnet-4-6",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["low", "medium", "high", "max"],
+          "default_reasoning_effort": "high",
+          "supports_attachments": true
+        },
+        {
+          "id": "zenlayer/claude-haiku-4-5-20251001",
+          "name": "zenlayer/claude-haiku-4-5-20251001",
+          "context_window": 200000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        }
+      ],
+      "advanced_models": [
+        "aws/claude-opus-4-7",
+        "aws/claude-opus-4-6",
+        "aws/claude-sonnet-4-6",
+        "aws/claude-haiku-4-5-20251001",
+        "zenlayer/claude-opus-4-7",
+        "zenlayer/claude-opus-4-6",
+        "zenlayer/claude-sonnet-4-6",
+        "zenlayer/claude-haiku-4-5-20251001"
+      ]
+    },
+    "athenai-openai-compat": {
+      "models": [
+        {
+          "id": "deepseek-v4-pro",
+          "name": "deepseek-v4-pro",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "high", "max"],
+          "default_reasoning_effort": "high"
+        },
+        {
+          "id": "deepseek-v4-flash",
+          "name": "deepseek-v4-flash",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "high", "max"],
+          "default_reasoning_effort": "high"
+        },
+        {
+          "id": "gpt-5.5",
+          "name": "gpt-5.5",
+          "context_window": 1050000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "low", "medium", "high", "xhigh"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "gpt-5.4",
+          "name": "gpt-5.4",
+          "context_window": 1050000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "low", "medium", "high", "xhigh"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "gpt-5.4-mini",
+          "name": "gpt-5.4-mini",
+          "context_window": 400000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "low", "medium", "high", "xhigh"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "gpt-5.4-nano",
+          "name": "gpt-5.4-nano",
+          "context_window": 400000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "low", "medium", "high", "xhigh"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "gpt-5.3-codex",
+          "name": "gpt-5.3-codex",
+          "context_window": 400000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["low", "medium", "high", "xhigh"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "gemini-3.1-pro-preview",
+          "name": "gemini-3.1-pro-preview",
+          "context_window": 1048576,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "gemini-3-flash-preview",
+          "name": "gemini-3-flash-preview",
+          "context_window": 1048576,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "gemini-3-pro-image-preview",
+          "name": "gemini-3-pro-image-preview",
+          "context_window": 65000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "gemini-3.1-flash-image-preview",
+          "name": "gemini-3.1-flash-image-preview",
+          "context_window": 65000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "kimi-k2.6",
+          "name": "kimi-k2.6",
+          "context_window": 262144,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "kimi-k2.5",
+          "name": "kimi-k2.5",
+          "context_window": 262144,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "qwen3.6-plus",
+          "name": "qwen3.6-plus",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "qwen3.6-flash",
+          "name": "qwen3.6-flash",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "qwen3.5-plus",
+          "name": "qwen3.5-plus",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "qwen3.5-flash",
+          "name": "qwen3.5-flash",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "qwen3-vl-flash",
+          "name": "qwen3-vl-flash",
+          "context_window": 256000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "doubao-seed-2-0-pro",
+          "name": "doubao-seed-2-0-pro",
+          "context_window": 256000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "minimal", "low", "medium", "high"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "doubao-seed-2-0-lite",
+          "name": "doubao-seed-2-0-lite",
+          "context_window": 256000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "minimal", "low", "medium", "high"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "doubao-seed-2-0-mini",
+          "name": "doubao-seed-2-0-mini",
+          "context_window": 256000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "minimal", "low", "medium", "high"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "glm-5",
+          "name": "glm-5",
+          "context_window": 200000,
+          "default_max_tokens": 16384,
+          "can_reason": true
+        },
+        {
+          "id": "glm-5.1",
+          "name": "glm-5.1",
+          "context_window": 200000,
+          "default_max_tokens": 16384,
+          "can_reason": true
+        },
+        {
+          "id": "MiniMax-M2.7",
+          "name": "MiniMax-M2.7",
+          "context_window": 204000,
+          "default_max_tokens": 16384
+        },
+        {
+          "id": "gui-plus",
+          "name": "gui-plus",
+          "context_window": 250000,
+          "default_max_tokens": 16384,
+          "supports_attachments": true
+        },
+        {
+          "id": "azure/gpt-5.5",
+          "name": "azure/gpt-5.5",
+          "context_window": 1050000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "low", "medium", "high", "xhigh"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "azure/gpt-5.4",
+          "name": "azure/gpt-5.4",
+          "context_window": 1050000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "low", "medium", "high", "xhigh"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "azure/gpt-5.4-mini",
+          "name": "azure/gpt-5.4-mini",
+          "context_window": 400000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "low", "medium", "high", "xhigh"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "azure/gpt-5.4-nano",
+          "name": "azure/gpt-5.4-nano",
+          "context_window": 400000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "low", "medium", "high", "xhigh"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "azure/gpt-5.3-codex",
+          "name": "azure/gpt-5.3-codex",
+          "context_window": 400000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["low", "medium", "high", "xhigh"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "zenlayer/gpt-5.5",
+          "name": "zenlayer/gpt-5.5",
+          "context_window": 1050000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "low", "medium", "high", "xhigh"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "zenlayer/gpt-5.4",
+          "name": "zenlayer/gpt-5.4",
+          "context_window": 1050000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "low", "medium", "high", "xhigh"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "zenlayer/gpt-5.4-mini",
+          "name": "zenlayer/gpt-5.4-mini",
+          "context_window": 400000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "low", "medium", "high", "xhigh"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "zenlayer/gpt-5.4-nano",
+          "name": "zenlayer/gpt-5.4-nano",
+          "context_window": 400000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "low", "medium", "high", "xhigh"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "zenlayer/gpt-5.3-codex",
+          "name": "zenlayer/gpt-5.3-codex",
+          "context_window": 400000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["low", "medium", "high", "xhigh"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "vertex_ai/gemini-3.1-pro-preview",
+          "name": "vertex_ai/gemini-3.1-pro-preview",
+          "context_window": 1048576,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "vertex_ai/gemini-3-flash-preview",
+          "name": "vertex_ai/gemini-3-flash-preview",
+          "context_window": 1048576,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "vertex_ai/gemini-3-pro-image-preview",
+          "name": "vertex_ai/gemini-3-pro-image-preview",
+          "context_window": 1048576,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "vertex_ai/gemini-3.1-flash-image-preview",
+          "name": "vertex_ai/gemini-3.1-flash-image-preview",
+          "context_window": 1048576,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "zenlayer/gemini-3.1-pro-preview",
+          "name": "zenlayer/gemini-3.1-pro-preview",
+          "context_window": 1048576,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "zenlayer/gemini-3-flash-preview",
+          "name": "zenlayer/gemini-3-flash-preview",
+          "context_window": 1048576,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "zenlayer/gemini-3-pro-image-preview",
+          "name": "zenlayer/gemini-3-pro-image-preview",
+          "context_window": 1048576,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "zenlayer/gemini-3.1-flash-image-preview",
+          "name": "zenlayer/gemini-3.1-flash-image-preview",
+          "context_window": 1048576,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "dashscope/deepseek-v4-pro",
+          "name": "dashscope/deepseek-v4-pro",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "high", "max"],
+          "default_reasoning_effort": "high"
+        },
+        {
+          "id": "dashscope/deepseek-v4-flash",
+          "name": "dashscope/deepseek-v4-flash",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "high", "max"],
+          "default_reasoning_effort": "high"
+        },
+        {
+          "id": "dashscope/kimi-k2.6",
+          "name": "dashscope/kimi-k2.6",
+          "context_window": 262144,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "dashscope/kimi-k2.5",
+          "name": "dashscope/kimi-k2.5",
+          "context_window": 262144,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "dashscope/qwen3.6-plus",
+          "name": "dashscope/qwen3.6-plus",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "dashscope/qwen3.6-flash",
+          "name": "dashscope/qwen3.6-flash",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "dashscope/qwen3.5-plus",
+          "name": "dashscope/qwen3.5-plus",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "dashscope/qwen3.5-flash",
+          "name": "dashscope/qwen3.5-flash",
+          "context_window": 1000000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "dashscope/qwen3-vl-flash",
+          "name": "dashscope/qwen3-vl-flash",
+          "context_window": 256000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "supports_attachments": true
+        },
+        {
+          "id": "volcengine/doubao-seed-2-0-pro",
+          "name": "volcengine/doubao-seed-2-0-pro",
+          "context_window": 256000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "minimal", "low", "medium", "high"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "volcengine/doubao-seed-2-0-lite",
+          "name": "volcengine/doubao-seed-2-0-lite",
+          "context_window": 256000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "minimal", "low", "medium", "high"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "volcengine/doubao-seed-2-0-mini",
+          "name": "volcengine/doubao-seed-2-0-mini",
+          "context_window": 256000,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "reasoning_levels": ["none", "minimal", "low", "medium", "high"],
+          "default_reasoning_effort": "medium",
+          "supports_attachments": true
+        },
+        {
+          "id": "dashscope/glm-5",
+          "name": "dashscope/glm-5",
+          "context_window": 200000,
+          "default_max_tokens": 16384,
+          "can_reason": true
+        },
+        {
+          "id": "dashscope/glm-5.1",
+          "name": "dashscope/glm-5.1",
+          "context_window": 200000,
+          "default_max_tokens": 16384,
+          "can_reason": true
+        },
+        {
+          "id": "dashscope/MiniMax-M2.7",
+          "name": "dashscope/MiniMax-M2.7",
+          "context_window": 204000,
+          "default_max_tokens": 16384
+        },
+        {
+          "id": "dashscope/gui-plus",
+          "name": "dashscope/gui-plus",
+          "context_window": 250000,
+          "default_max_tokens": 16384,
+          "supports_attachments": true
+        }
+      ],
+      "advanced_models": [
+        "azure/gpt-5.5",
+        "azure/gpt-5.4",
+        "azure/gpt-5.4-mini",
+        "azure/gpt-5.4-nano",
+        "azure/gpt-5.3-codex",
+        "zenlayer/gpt-5.5",
+        "zenlayer/gpt-5.4",
+        "zenlayer/gpt-5.4-mini",
+        "zenlayer/gpt-5.4-nano",
+        "zenlayer/gpt-5.3-codex",
+        "vertex_ai/gemini-3.1-pro-preview",
+        "vertex_ai/gemini-3-flash-preview",
+        "vertex_ai/gemini-3-pro-image-preview",
+        "vertex_ai/gemini-3.1-flash-image-preview",
+        "zenlayer/gemini-3.1-pro-preview",
+        "zenlayer/gemini-3-flash-preview",
+        "zenlayer/gemini-3-pro-image-preview",
+        "zenlayer/gemini-3.1-flash-image-preview",
+        "dashscope/deepseek-v4-pro",
+        "dashscope/deepseek-v4-flash",
+        "dashscope/kimi-k2.6",
+        "dashscope/kimi-k2.5",
+        "dashscope/qwen3.6-plus",
+        "dashscope/qwen3.6-flash",
+        "dashscope/qwen3.5-plus",
+        "dashscope/qwen3.5-flash",
+        "dashscope/qwen3-vl-flash",
+        "volcengine/doubao-seed-2-0-pro",
+        "volcengine/doubao-seed-2-0-lite",
+        "volcengine/doubao-seed-2-0-mini",
+        "dashscope/glm-5",
+        "dashscope/glm-5.1",
+        "dashscope/MiniMax-M2.7",
+        "dashscope/gui-plus"
+      ]
+    }
+  },
+  "default_context_window": 200000,
+  "default_max_tokens": 16384
+}

@@ -536,6 +536,7 @@ func (c *Config) defaultModelSelection(knownProviders []catwalk.Provider) (large
 			Model:           defaultLargeModel.ID,
 			MaxTokens:       defaultLargeModel.DefaultMaxTokens,
 			ReasoningEffort: defaultLargeModel.DefaultReasoningEffort,
+			Think:           defaultLargeModel.DefaultReasoningEffort != "",
 		}
 
 		defaultSmallModel := c.GetModel(string(p.ID), p.DefaultSmallModelID)
@@ -548,6 +549,7 @@ func (c *Config) defaultModelSelection(knownProviders []catwalk.Provider) (large
 			Model:           defaultSmallModel.ID,
 			MaxTokens:       defaultSmallModel.DefaultMaxTokens,
 			ReasoningEffort: defaultSmallModel.DefaultReasoningEffort,
+			Think:           defaultSmallModel.DefaultReasoningEffort != "",
 		}
 		return largeModel, smallModel, err
 	}
@@ -560,6 +562,23 @@ func (c *Config) defaultModelSelection(knownProviders []catwalk.Provider) (large
 	if len(enabledProviders) == 0 {
 		err = fmt.Errorf("no providers configured, please configure at least one provider")
 		return largeModel, smallModel, err
+	}
+
+	// Prefer deepseek-v4-pro as the default large model across all
+	// enabled providers.
+	for _, pc := range enabledProviders {
+		for _, m := range pc.Models {
+			if strings.EqualFold(m.ID, "deepseek-v4-pro") {
+				largeModel = SelectedModel{
+					Provider:        pc.ID,
+					Model:           m.ID,
+					MaxTokens:       m.DefaultMaxTokens,
+					ReasoningEffort: m.DefaultReasoningEffort,
+				}
+				smallModel = largeModel
+				return largeModel, smallModel, nil
+			}
+		}
 	}
 
 	providerConfig := enabledProviders[0]

@@ -133,6 +133,9 @@ type ProviderConfig struct {
 
 	// The provider models
 	Models []catwalk.Model `json:"models,omitempty" jsonschema:"description=List of models available from this provider"`
+
+	// Model IDs that should be hidden by default in the model picker.
+	AdvancedModels []string `json:"advanced_models,omitempty" jsonschema:"description=Model IDs hidden by default in the model picker"`
 }
 
 // ToProvider converts the [ProviderConfig] to a [catwalk.Provider].

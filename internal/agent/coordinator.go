@@ -414,9 +414,11 @@ func getProviderOptions(model Model, providerCfg config.ProviderConfig) fantasy.
 			_, hasThink  = mergedOptions["thinking"]
 		)
 		switch {
-		case !hasEffort && model.ModelCfg.ReasoningEffort != "":
+		case !hasEffort && isEffortLevel(model.ModelCfg.ReasoningEffort):
 			mergedOptions["effort"] = model.ModelCfg.ReasoningEffort
-		case !hasThink && model.ModelCfg.Think:
+		case !hasThink && model.ModelCfg.ReasoningEffort == "on":
+			mergedOptions["thinking"] = map[string]any{"budget_tokens": 2000}
+		case !hasThink && model.ModelCfg.Think && model.ModelCfg.ReasoningEffort == "":
 			mergedOptions["thinking"] = map[string]any{"budget_tokens": 2000}
 		}
 		parsed, err := anthropic.ParseOptions(mergedOptions)
@@ -468,17 +470,24 @@ func getProviderOptions(model Model, providerCfg config.ProviderConfig) fantasy.
 			options[google.Name] = parsed
 		}
 	case openaicompat.Name, hyper.Name:
+		// Detect models that use the DeepSeek/Doubao-style thinking toggle
+		// ({"thinking": {"type": "enabled/disabled"}}).
+		modelID := strings.ToLower(model.CatwalkCfg.ID)
+		needsThinkingToggle := strings.Contains(modelID, "deepseek") ||
+			strings.Contains(modelID, "doubao") ||
+			strings.Contains(modelID, "seed")
+
 		_, hasReasoningEffort := mergedOptions["reasoning_effort"]
 		if !hasReasoningEffort && model.ModelCfg.ReasoningEffort != "" {
-			mergedOptions["reasoning_effort"] = model.ModelCfg.ReasoningEffort
+			// "none" means disabled for models with thinking toggle;
+			// don't send it as reasoning_effort.
+			if !(needsThinkingToggle && model.ModelCfg.ReasoningEffort == "none") {
+				mergedOptions["reasoning_effort"] = model.ModelCfg.ReasoningEffort
+			}
 		}
 
 		extraBody := make(map[string]any)
 
-		// "reasoning effort" is a standard OpenAI field, but "thinking" is not.
-		// Setting it in the right way for each provider.
-		// TODO: Abstract this in Fantasy somehow?
-		// TODO: Allow custom providers to specify how to set this?
 		switch providerCfg.ID {
 		case hyper.Name:
 			extraBody["thinking"] = model.ModelCfg.Think
@@ -496,6 +505,14 @@ func getProviderOptions(model Model, providerCfg config.ProviderConfig) fantasy.
 					"type": "disabled",
 				}
 			}
+		default:
+			if needsThinkingToggle {
+				if model.ModelCfg.ReasoningEffort == "none" || model.ModelCfg.ReasoningEffort == "" {
+					extraBody["thinking"] = map[string]any{"type": "disabled"}
+				} else {
+					extraBody["thinking"] = map[string]any{"type": "enabled"}
+				}
+			}
 		}
 
 		mergedOptions["extra_body"] = extraBody
@@ -507,6 +524,15 @@ func getProviderOptions(model Model, providerCfg config.ProviderConfig) fantasy.
 	}
 
 	return options
+}
+
+// isEffortLevel returns true if the string is a valid Anthropic effort level.
+func isEffortLevel(s string) bool {
+	switch s {
+	case "low", "medium", "high", "xhigh", "max":
+		return true
+	}
+	return false
 }
 
 func mergeCallOptions(model Model, cfg config.ProviderConfig) (fantasy.ProviderOptions, *float64, *float64, *int64, *float64, *float64) {
@@ -971,7 +997,12 @@ func (c *coordinator) buildGoogleVertexProvider(headers map[string]string, optio
 }
 
 func (c *coordinator) isAnthropicThinking(model config.SelectedModel) bool {
-	if model.Think {
+	// Adaptive thinking (effort-based) does not need the interleaved-thinking
+	// beta header — it supports interleaved thinking natively.
+	if isEffortLevel(model.ReasoningEffort) {
+		return false
+	}
+	if model.Think || model.ReasoningEffort == "on" {
 		return true
 	}
 	opts, err := anthropic.ParseOptions(model.ProviderOptions)

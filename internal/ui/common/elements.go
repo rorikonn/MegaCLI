@@ -45,9 +45,9 @@ type ModelContextInfo struct {
 }
 
 // ModelDisplayName builds a human-readable model name with reasoning suffix.
-// For Anthropic models with thinking enabled: "Claude Opus 4-thinking".
-// For models with reasoning effort levels: "o3-effort-high".
-// Otherwise just the model name.
+// For models with effort-based reasoning: "claude-opus-4-7-thinking-high".
+// For models with manual thinking: "claude-opus-4-5-thinking".
+// When reasoning is off: just the model name.
 func ModelDisplayName(model catwalk.Model, cfg config.SelectedModel) string {
 	name := model.Name
 	if name == "" {
@@ -58,20 +58,23 @@ func ModelDisplayName(model catwalk.Model, cfg config.SelectedModel) string {
 		return name
 	}
 
-	// Anthropic-style: binary think on/off.
-	if len(model.ReasoningLevels) == 0 {
-		if cfg.Think {
-			return name + "-thinking"
-		}
+	effort := cfg.ReasoningEffort
+
+	// User explicitly disabled reasoning.
+	if effort == "none" {
 		return name
 	}
 
-	// OpenAI-style: effort levels.
-	effort := cmp.Or(cfg.ReasoningEffort, model.DefaultReasoningEffort)
-	if effort != "" {
-		return name + "-effort-" + effort
+	if effort == "" && !cfg.Think {
+		if len(model.ReasoningLevels) > 0 && model.DefaultReasoningEffort != "" {
+			return name + "-thinking-" + model.DefaultReasoningEffort
+		}
+		return name
 	}
-	return name
+	if effort == "on" || (cfg.Think && effort == "") {
+		return name + "-thinking"
+	}
+	return name + "-thinking-" + effort
 }
 
 // ModelInfo renders model information including name, provider, reasoning

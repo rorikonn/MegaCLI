@@ -100,8 +100,8 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("tab", "change focus"),
 		),
 		Agents: key.NewBinding(
-			key.WithKeys("ctrl+a"),
-			key.WithHelp("ctrl+a", "agents"),
+			key.WithKeys("ctrl+a", "shift+tab"),
+			key.WithHelp("shift+tab", "agents"),
 		),
 		Dashboard: key.NewBinding(
 			key.WithKeys("ctrl+shift+d"),

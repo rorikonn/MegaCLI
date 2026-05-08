@@ -4,6 +4,7 @@
 package setup
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +16,9 @@ import (
 
 	"github.com/megacli/megacli/internal/config"
 )
+
+//go:embed model_presets.json
+var modelPresetsJSON []byte
 
 const (
 	defaultProviderID           = "athenai"
@@ -28,182 +32,29 @@ const (
 	apiKeyPrefix                = "Bearer "
 )
 
-// modelTypeDetect returns the provider type best suited for a model ID.
-// Returns the provider type string ("anthropic" or "openai-compat").
-func modelTypeDetect(modelID string) string {
-	lower := strings.ToLower(modelID)
-	// Anthropic models
-	if strings.Contains(lower, "claude") || strings.Contains(lower, "anthropic") {
-		return "anthropic"
-	}
-	// OpenAI models
-	if strings.Contains(lower, "gpt") || strings.Contains(lower, "o1") ||
-		strings.Contains(lower, "o3") || strings.Contains(lower, "o4") ||
-		strings.Contains(lower, "openai") {
-		return "openai-compat"
-	}
-	// DeepSeek models
-	if strings.Contains(lower, "deepseek") {
-		return "openai-compat"
-	}
-	// Gemini models
-	if strings.Contains(lower, "gemini") {
-		return "openai-compat"
-	}
-	// Default to openai-compat for unknown models
-	return "openai-compat"
+// templateProvider holds model definitions and advanced model IDs for a
+// single provider within the setup template.
+type templateProvider struct {
+	Models         []map[string]any `json:"models"`
+	AdvancedModels []string         `json:"advanced_models"`
 }
 
-// providerIDForType returns a provider key for the given type.
-func providerIDForType(ptype string) string {
-	if ptype == "anthropic" {
+// setupTemplate is the embedded JSON template that defines all known model
+// configurations, their ordering, and default parameters.
+type setupTemplate struct {
+	ProviderOrder        []string                    `json:"provider_order"`
+	Providers            map[string]templateProvider `json:"providers"`
+	DefaultContextWindow int64                       `json:"default_context_window"`
+	DefaultMaxTokens     int64                       `json:"default_max_tokens"`
+}
+
+// detectProvider returns the provider ID for a given model name.
+func detectProvider(modelID string) string {
+	lower := strings.ToLower(modelID)
+	if strings.Contains(lower, "claude") || strings.Contains(lower, "anthropic") {
 		return defaultProviderID
 	}
 	return defaultOpenAICompatProvider
-}
-
-// modelPreset defines the known attributes for a model or model family.
-type modelPreset struct {
-	ContextWindow          int64
-	DefaultMaxTokens       int64
-	CanReason              bool
-	ReasoningLevels        []string
-	DefaultReasoningEffort string
-	SupportsImages         bool
-}
-
-// modelPresetEntry maps a pattern to a preset. Entries are checked in
-// order; first match wins.
-type modelPresetEntry struct {
-	Pattern string      // model ID or substring to match
-	Exact   bool        // require exact (case-insensitive) match
-	Preset  modelPreset //nolint:govet
-}
-
-// defaultPreset is used for chat models that don't match any known preset.
-var defaultPreset = modelPreset{
-	ContextWindow:    200000,
-	DefaultMaxTokens: 16384,
-}
-
-// modelPresets is the preset registry. Exact matches are listed first,
-// followed by substring matches ordered from most specific to least
-// specific within each family.
-var modelPresets = []modelPresetEntry{
-	// ---- Exact matches (unique parameters) ----
-	{Pattern: "gemini-3-pro-image-preview", Exact: true, Preset: modelPreset{
-		ContextWindow: 65000, DefaultMaxTokens: 16384, CanReason: true, SupportsImages: true,
-	}},
-	{Pattern: "gemini-3.1-flash-image-preview", Exact: true, Preset: modelPreset{
-		ContextWindow: 65000, DefaultMaxTokens: 16384, CanReason: true, SupportsImages: true,
-	}},
-	{Pattern: "glm-5.1", Exact: true, Preset: modelPreset{
-		ContextWindow: 200000, DefaultMaxTokens: 16384, CanReason: true,
-	}},
-	{Pattern: "glm-5", Exact: true, Preset: modelPreset{
-		ContextWindow: 202000, DefaultMaxTokens: 16384, CanReason: true,
-	}},
-	{Pattern: "MiniMax-M2.7", Exact: true, Preset: modelPreset{
-		ContextWindow: 204000, DefaultMaxTokens: 16384,
-	}},
-	{Pattern: "gui-plus", Exact: true, Preset: modelPreset{
-		ContextWindow: 250000, DefaultMaxTokens: 16384, SupportsImages: true,
-	}},
-
-	// ---- Substring matches (most specific first) ----
-
-	// Claude
-	{Pattern: "claude-haiku", Preset: modelPreset{
-		ContextWindow: 200000, DefaultMaxTokens: 16384, CanReason: true, SupportsImages: true,
-	}},
-	{Pattern: "claude", Preset: modelPreset{
-		ContextWindow: 1000000, DefaultMaxTokens: 16384, CanReason: true, SupportsImages: true,
-	}},
-
-	// GPT (specific variants before family fallback)
-	{Pattern: "gpt-5.3-codex", Preset: modelPreset{
-		ContextWindow: 400000, DefaultMaxTokens: 16384, CanReason: true,
-		ReasoningLevels:        []string{"none", "low", "medium", "high", "xhigh"},
-		DefaultReasoningEffort: "medium", SupportsImages: true,
-	}},
-	{Pattern: "gpt-5.4-mini", Preset: modelPreset{
-		ContextWindow: 400000, DefaultMaxTokens: 16384, CanReason: true,
-		ReasoningLevels:        []string{"none", "low", "medium", "high", "xhigh"},
-		DefaultReasoningEffort: "medium", SupportsImages: true,
-	}},
-	{Pattern: "gpt-5.4-nano", Preset: modelPreset{
-		ContextWindow: 400000, DefaultMaxTokens: 16384, CanReason: true,
-		ReasoningLevels:        []string{"none", "low", "medium", "high", "xhigh"},
-		DefaultReasoningEffort: "medium", SupportsImages: true,
-	}},
-	{Pattern: "gpt", Preset: modelPreset{
-		ContextWindow: 1050000, DefaultMaxTokens: 16384, CanReason: true,
-		ReasoningLevels:        []string{"none", "low", "medium", "high", "xhigh"},
-		DefaultReasoningEffort: "medium", SupportsImages: true,
-	}},
-
-	// Gemini (image variants handled by exact match above)
-	{Pattern: "gemini", Preset: modelPreset{
-		ContextWindow: 1048000, DefaultMaxTokens: 16384, CanReason: true, SupportsImages: true,
-	}},
-
-	// Doubao
-	{Pattern: "doubao-seed", Preset: modelPreset{
-		ContextWindow: 256000, DefaultMaxTokens: 16384, CanReason: true,
-		ReasoningLevels:        []string{"minimal", "low", "medium", "high"},
-		DefaultReasoningEffort: "medium", SupportsImages: true,
-	}},
-
-	// DeepSeek
-	{Pattern: "deepseek", Preset: modelPreset{
-		ContextWindow: 1024000, DefaultMaxTokens: 16384, CanReason: true,
-	}},
-
-	// Qwen (specific variants first)
-	{Pattern: "qwen3-vl", Preset: modelPreset{
-		ContextWindow: 256000, DefaultMaxTokens: 16384, CanReason: true, SupportsImages: true,
-	}},
-	{Pattern: "qwen3.5-122b", Preset: modelPreset{
-		ContextWindow: 262000, DefaultMaxTokens: 16384, SupportsImages: true,
-	}},
-	{Pattern: "qwen", Preset: modelPreset{
-		ContextWindow: 1000000, DefaultMaxTokens: 16384, CanReason: true, SupportsImages: true,
-	}},
-
-	// kimi
-	{Pattern: "kimi-k2", Preset: modelPreset{
-		ContextWindow: 256000, DefaultMaxTokens: 16384, CanReason: true, SupportsImages: true,
-	}},
-}
-
-// lookupPreset finds the best matching preset for a model ID.
-// Returns the preset and true if a known match was found, or the
-// conservative default preset and false otherwise.
-func lookupPreset(modelID string) (modelPreset, bool) {
-	lower := strings.ToLower(modelID)
-	for _, entry := range modelPresets {
-		pattern := strings.ToLower(entry.Pattern)
-		if entry.Exact {
-			if lower == pattern {
-				return entry.Preset, true
-			}
-		} else if strings.Contains(lower, pattern) {
-			return entry.Preset, true
-		}
-	}
-	return defaultPreset, false
-}
-
-// isChatModel returns false for known non-chat model types such as
-// embedding, reranking, ASR, and image-generation models.
-func isChatModel(id string) bool {
-	lower := strings.ToLower(id)
-	for _, p := range []string{"embedding", "rerank", "asr", "bge-", "gpt-image"} {
-		if strings.Contains(lower, p) {
-			return false
-		}
-	}
-	return true
 }
 
 // templateConfig is the minimal config written on first run.
@@ -425,10 +276,11 @@ func HasModelsConfigured(cfgPath string) (bool, error) {
 	return false, nil
 }
 
-// WriteModelsToConfig writes models into the global config, enriching each
-// model with attributes from the preset registry. Non-chat models (embedding,
-// reranking, ASR, image-gen) are automatically excluded. Models are split
-// across anthropic and openai-compat providers based on model type.
+// WriteModelsToConfig writes models into the global config using the embedded
+// template. Template models are filtered against the API's available list,
+// then any remaining API models not in the template are appended with
+// default parameters (fallback). The first non-advanced model in template
+// order becomes the default.
 func WriteModelsToConfig(cfgPath string, models []ModelInfo) error {
 	raw, err := os.ReadFile(cfgPath)
 	if err != nil {
@@ -445,74 +297,102 @@ func WriteModelsToConfig(cfgPath string, models []ModelInfo) error {
 		providers = make(map[string]any)
 	}
 
-	// Group chat models by provider type, enriched with preset attributes.
-	anthropicModels := []map[string]any{}
-	openAICompatModels := []map[string]any{}
-	var chatModels []ModelInfo
+	// Load embedded template.
+	var tpl setupTemplate
+	if err := json.Unmarshal(modelPresetsJSON, &tpl); err != nil {
+		return fmt.Errorf("failed to parse model presets template: %w", err)
+	}
 
+	// Build API available model ID set (case-insensitive).
+	available := make(map[string]bool, len(models))
 	for _, m := range models {
-		if !isChatModel(m.ID) {
+		available[strings.ToLower(m.ID)] = true
+	}
+
+	// Build set of model IDs covered by template.
+	templateCovered := make(map[string]bool)
+	for _, p := range tpl.Providers {
+		for _, m := range p.Models {
+			if id, ok := m["id"].(string); ok {
+				templateCovered[strings.ToLower(id)] = true
+			}
+		}
+	}
+
+	// Filter template models: keep only those available in API.
+	for pid, provider := range tpl.Providers {
+		var filtered []map[string]any
+		for _, m := range provider.Models {
+			id, _ := m["id"].(string)
+			if available[strings.ToLower(id)] {
+				filtered = append(filtered, m)
+			}
+		}
+		var filteredAdv []string
+		for _, id := range provider.AdvancedModels {
+			if available[strings.ToLower(id)] {
+				filteredAdv = append(filteredAdv, id)
+			}
+		}
+		provider.Models = filtered
+		provider.AdvancedModels = filteredAdv
+		tpl.Providers[pid] = provider
+	}
+
+	// Fallback: append API models not covered by template.
+	for _, m := range models {
+		if templateCovered[strings.ToLower(m.ID)] {
 			continue
 		}
-		chatModels = append(chatModels, m)
-
-		preset, _ := lookupPreset(m.ID)
-		def := map[string]any{
-			"id":                   m.ID,
-			"name":                 m.ID,
-			"context_window":       preset.ContextWindow,
-			"default_max_tokens":   preset.DefaultMaxTokens,
-			"supports_attachments": preset.SupportsImages,
-			"can_reason":           preset.CanReason,
-		}
-		if len(preset.ReasoningLevels) > 0 {
-			def["reasoning_levels"] = preset.ReasoningLevels
-		}
-		if preset.DefaultReasoningEffort != "" {
-			def["default_reasoning_effort"] = preset.DefaultReasoningEffort
-		}
-
-		if modelTypeDetect(m.ID) == "anthropic" {
-			anthropicModels = append(anthropicModels, def)
-		} else {
-			openAICompatModels = append(openAICompatModels, def)
-		}
+		pid := detectProvider(m.ID)
+		p := tpl.Providers[pid]
+		p.Models = append(p.Models, map[string]any{
+			"id":                 m.ID,
+			"name":               m.ID,
+			"context_window":     tpl.DefaultContextWindow,
+			"default_max_tokens": tpl.DefaultMaxTokens,
+		})
+		tpl.Providers[pid] = p
 	}
 
-	// Write anthropic models under the anthropic provider.
-	if len(anthropicModels) > 0 {
-		provider, _ := providers[defaultProviderID].(map[string]any)
-		if provider == nil {
-			provider = make(map[string]any)
+	// Write providers to config.
+	for pid, provider := range tpl.Providers {
+		existing, _ := providers[pid].(map[string]any)
+		if existing == nil {
+			existing = make(map[string]any)
 		}
-		provider["models"] = anthropicModels
-		providers[defaultProviderID] = provider
-	}
-
-	// Write openai-compat models under the openai-compat provider.
-	if len(openAICompatModels) > 0 {
-		provider, _ := providers[defaultOpenAICompatProvider].(map[string]any)
-		if provider == nil {
-			provider = make(map[string]any)
+		existing["models"] = provider.Models
+		if len(provider.AdvancedModels) > 0 {
+			existing["advanced_models"] = provider.AdvancedModels
 		}
-		provider["models"] = openAICompatModels
-		providers[defaultOpenAICompatProvider] = provider
+		providers[pid] = existing
 	}
-
 	cfgMap["providers"] = providers
 
-	// Auto-select large and small models from the first available chat model.
+	// Select default model: first non-advanced model in template order.
 	modelSelections := map[string]any{}
-	if len(chatModels) > 0 {
-		first := chatModels[0]
-		firstProvider := providerIDForType(modelTypeDetect(first.ID))
-		modelSelections["large"] = map[string]any{
-			"provider": firstProvider,
-			"model":    first.ID,
+	for _, pid := range tpl.ProviderOrder {
+		provider := tpl.Providers[pid]
+		advSet := make(map[string]bool, len(provider.AdvancedModels))
+		for _, id := range provider.AdvancedModels {
+			advSet[id] = true
 		}
-		modelSelections["small"] = map[string]any{
-			"provider": firstProvider,
-			"model":    first.ID,
+		for _, m := range provider.Models {
+			id, _ := m["id"].(string)
+			if !advSet[id] {
+				modelSelections["large"] = map[string]any{
+					"provider": pid,
+					"model":    id,
+				}
+				modelSelections["small"] = map[string]any{
+					"provider": pid,
+					"model":    id,
+				}
+				break
+			}
+		}
+		if len(modelSelections) > 0 {
+			break
 		}
 	}
 	cfgMap["models"] = modelSelections

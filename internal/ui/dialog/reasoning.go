@@ -17,9 +17,8 @@ import (
 
 const (
 	// ReasoningID is the identifier for the reasoning effort dialog.
-	ReasoningID              = "reasoning"
-	reasoningDialogMaxWidth  = 50
-	reasoningDialogMaxHeight = 10
+	ReasoningID             = "reasoning"
+	reasoningDialogMaxWidth = 50
 )
 
 // Reasoning represents a dialog for selecting reasoning effort.
@@ -158,19 +157,20 @@ func (r *Reasoning) Cursor() *tea.Cursor {
 func (r *Reasoning) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	t := r.com.Styles
 	width := max(0, min(reasoningDialogMaxWidth, area.Dx()))
-	height := max(0, min(reasoningDialogMaxHeight, area.Dy()))
 	innerWidth := width - t.Dialog.View.GetHorizontalFrameSize()
 	heightOffset := t.Dialog.Title.GetVerticalFrameSize() + titleContentHeight +
 		t.Dialog.InputPrompt.GetVerticalFrameSize() + inputContentHeight +
 		t.Dialog.HelpView.GetVerticalFrameSize() +
 		t.Dialog.View.GetVerticalFrameSize()
+	neededHeight := heightOffset + len(r.list.FilteredItems())
+	height := max(0, min(neededHeight, area.Dy()))
 
 	r.input.SetWidth(innerWidth - t.Dialog.InputPrompt.GetHorizontalFrameSize() - 1)
 	r.list.SetSize(innerWidth, height-heightOffset)
 	r.help.SetWidth(innerWidth)
 
 	rc := NewRenderContext(t, width)
-	rc.Title = "Select Reasoning Effort"
+	rc.Title = "Select Reasoning Mode"
 	inputView := t.Dialog.InputPrompt.Render(r.input.View())
 	rc.AddPart(inputView)
 
@@ -230,8 +230,25 @@ func (r *Reasoning) setReasoningItems() error {
 		return errors.New("model configuration not found")
 	}
 
-	if len(model.ReasoningLevels) == 0 {
-		return errors.New("no reasoning levels available")
+	if !model.CanReason {
+		return errors.New("model does not support reasoning")
+	}
+
+	providerCfg := cfg.GetProviderForModel(agentCfg.Model)
+	isAnthropic := providerCfg != nil && (providerCfg.Type == "anthropic" || providerCfg.Type == "bedrock" || providerCfg.Type == "google-vertex")
+
+	var options []string
+	if isAnthropic {
+		if len(model.ReasoningLevels) > 0 {
+			options = append([]string{"none"}, model.ReasoningLevels...)
+		} else {
+			options = []string{"none", "on"}
+		}
+	} else {
+		if len(model.ReasoningLevels) == 0 {
+			return errors.New("no reasoning levels available")
+		}
+		options = model.ReasoningLevels
 	}
 
 	currentEffort := selectedModel.ReasoningEffort
@@ -239,12 +256,12 @@ func (r *Reasoning) setReasoningItems() error {
 		currentEffort = model.DefaultReasoningEffort
 	}
 
-	items := make([]list.FilterableItem, 0, len(model.ReasoningLevels))
+	items := make([]list.FilterableItem, 0, len(options))
 	selectedIndex := 0
-	for i, effort := range model.ReasoningLevels {
+	for i, effort := range options {
 		item := &ReasoningItem{
 			effort:    effort,
-			title:     common.FormatReasoningEffort(effort),
+			title:     formatReasoningOption(effort),
 			isCurrent: effort == currentEffort,
 			t:         r.com.Styles,
 		}
@@ -258,6 +275,18 @@ func (r *Reasoning) setReasoningItems() error {
 	r.list.SetSelected(selectedIndex)
 	r.list.ScrollToSelected()
 	return nil
+}
+
+// formatReasoningOption formats a reasoning option for display in the menu.
+func formatReasoningOption(effort string) string {
+	switch effort {
+	case "", "none":
+		return "Off"
+	case "on":
+		return "On"
+	default:
+		return common.FormatReasoningEffort(effort)
+	}
 }
 
 // Filter returns the filter value for the reasoning item.

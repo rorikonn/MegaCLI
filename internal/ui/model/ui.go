@@ -1577,29 +1577,7 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		}
 		m.dialog.CloseDialog(dialog.CommandsID)
 	case dialog.ActionToggleThinking:
-		cmds = append(cmds, func() tea.Msg {
-			cfg := m.com.Config()
-			if cfg == nil {
-				return util.ReportError(errors.New("configuration not found"))()
-			}
-
-			agentCfg, ok := cfg.Agents[config.AgentCoder]
-			if !ok {
-				return util.ReportError(errors.New("agent configuration not found"))()
-			}
-
-			currentModel := cfg.Models[agentCfg.Model]
-			currentModel.Think = !currentModel.Think
-			if err := m.com.Workspace.UpdatePreferredModel(config.ScopeGlobal, agentCfg.Model, currentModel); err != nil {
-				return util.ReportError(err)()
-			}
-			m.com.Workspace.UpdateAgentModel(context.TODO())
-			status := "disabled"
-			if currentModel.Think {
-				status = "enabled"
-			}
-			return util.NewInfoMsg("Thinking mode " + status)
-		})
+		// Deprecated: handled by the unified reasoning mode dialog.
 		m.dialog.CloseDialog(dialog.CommandsID)
 	case dialog.ActionToggleTransparentBackground:
 		cmds = append(cmds, func() tea.Msg {
@@ -1662,14 +1640,30 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 
 		currentModel := cfg.Models[agentCfg.Model]
 		currentModel.ReasoningEffort = msg.Effort
+
+		// Sync Think field for providers that use a thinking toggle.
+		providerCfg := cfg.GetProviderForModel(agentCfg.Model)
+		if providerCfg != nil {
+			switch providerCfg.Type {
+			case "anthropic", "bedrock", "google-vertex":
+				currentModel.Think = msg.Effort != "" && msg.Effort != "none"
+			case "openai-compat":
+				currentModel.Think = msg.Effort != "" && msg.Effort != "none"
+			}
+		}
+
 		if err := m.com.Workspace.UpdatePreferredModel(config.ScopeGlobal, agentCfg.Model, currentModel); err != nil {
 			cmds = append(cmds, util.ReportError(err))
 			break
 		}
 
+		statusMsg := "Reasoning mode set to Off"
+		if msg.Effort != "" {
+			statusMsg = "Reasoning mode set to " + msg.Effort
+		}
 		cmds = append(cmds, func() tea.Msg {
 			m.com.Workspace.UpdateAgentModel(context.TODO())
-			return util.NewInfoMsg("Reasoning effort set to " + msg.Effort)
+			return util.NewInfoMsg(statusMsg)
 		})
 		m.dialog.CloseDialog(dialog.ReasoningID)
 	case dialog.ActionPermissionResponse:
