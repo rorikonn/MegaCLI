@@ -61,6 +61,15 @@ type UpdateDownloadingMsg struct {
 	LatestVersion  string
 }
 
+// UpdateProgressMsg is sent periodically during an update download to
+// report progress.
+type UpdateProgressMsg struct {
+	Downloaded     int64
+	Total          int64
+	CurrentVersion string
+	LatestVersion  string
+}
+
 // UpdateAppliedMsg is sent when an update has been applied and a restart
 // is needed to use the new version.
 type UpdateAppliedMsg struct {
@@ -765,7 +774,14 @@ func (app *App) checkForUpdates(ctx context.Context) {
 	updCtx, updCancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer updCancel()
 
-	newVersion, err := update.Apply(updCtx, info.Latest)
+	newVersion, err := update.ApplyWithProgress(updCtx, info.Latest, func(downloaded, total int64) {
+		app.events.Publish(pubsub.UpdatedEvent, UpdateProgressMsg{
+			Downloaded:     downloaded,
+			Total:          total,
+			CurrentVersion: info.Current,
+			LatestVersion:  info.Latest,
+		})
+	})
 	if err != nil {
 		slog.Warn("Auto-update failed, notifying user", "error", err)
 		app.events.Publish(pubsub.UpdatedEvent, UpdateAvailableMsg{

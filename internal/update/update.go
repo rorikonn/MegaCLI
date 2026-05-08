@@ -90,10 +90,21 @@ func Check(ctx context.Context, current string) (Info, error) {
 	return info, nil
 }
 
+// ProgressFunc is called during download with the number of bytes
+// downloaded so far and the total size in bytes.
+type ProgressFunc func(downloaded, total int64)
+
 // Apply downloads and installs the specified version, replacing the
 // current binary. Returns the new version string.
 func Apply(ctx context.Context, version string) (string, error) {
-	updater, err := newUpdater()
+	return ApplyWithProgress(ctx, version, nil)
+}
+
+// ApplyWithProgress downloads and installs the specified version with
+// progress reporting. The onProgress callback is invoked during the
+// download with the number of bytes downloaded and total size.
+func ApplyWithProgress(ctx context.Context, version string, onProgress ProgressFunc) (string, error) {
+	updater, err := newUpdaterWithProgress(onProgress)
 	if err != nil {
 		return "", fmt.Errorf("failed to create updater: %w", err)
 	}

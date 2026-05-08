@@ -988,12 +988,21 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, clearInfoMsgCmd(ttl))
 	case app.UpdateDownloadingMsg:
 		m.isUpdating = true
-		m.updateStatusText = fmt.Sprintf("Updating v%s → v%s…", msg.CurrentVersion, msg.LatestVersion)
+		m.updateStatusText = fmt.Sprintf("Updating v%s → v%s… 0%%", msg.CurrentVersion, msg.LatestVersion)
 		m.status.SetInfoMsg(util.InfoMsg{
 			Type: util.InfoTypeUpdate,
 			Msg:  m.updateSpinner.View() + " " + m.updateStatusText,
 		})
 		cmds = append(cmds, m.updateSpinner.Tick)
+	case app.UpdateProgressMsg:
+		if msg.Total > 0 {
+			pct := int(msg.Downloaded * 100 / msg.Total)
+			m.updateStatusText = fmt.Sprintf("Updating v%s → v%s… %d%%", msg.CurrentVersion, msg.LatestVersion, pct)
+			m.status.SetInfoMsg(util.InfoMsg{
+				Type: util.InfoTypeUpdate,
+				Msg:  m.updateSpinner.View() + " " + m.updateStatusText,
+			})
+		}
 	case app.UpdateAppliedMsg:
 		m.isUpdating = false
 		text := fmt.Sprintf("MegaCLI updated to v%s. Restarting is recommended.", msg.Version)

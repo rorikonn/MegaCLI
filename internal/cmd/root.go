@@ -128,11 +128,22 @@ megacli --agent coder
 			fmt.Printf("Updating from v%s to v%s...\n", info.Current, info.Latest)
 			updCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 			defer cancel()
-			newVersion, err := update.Apply(updCtx, info.Latest)
+			var lastPct int
+			newVersion, err := update.ApplyWithProgress(updCtx, info.Latest, func(downloaded, total int64) {
+				if total <= 0 {
+					return
+				}
+				pct := int(downloaded * 100 / total)
+				if pct != lastPct {
+					lastPct = pct
+					fmt.Printf("\rDownloading... %d%%", pct)
+				}
+			})
 			if err != nil {
+				fmt.Println() // newline after progress
 				return fmt.Errorf("update failed: %w", err)
 			}
-			fmt.Printf("Updated to v%s. Restart MegaCLI to use the new version.\n", newVersion)
+			fmt.Printf("\rUpdated to v%s. Restart MegaCLI to use the new version.\n", newVersion)
 			return nil
 		}
 
