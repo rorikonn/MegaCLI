@@ -302,6 +302,11 @@ type UI struct {
 		draft    string
 	}
 
+	// agentExplicitlySet is true when the agent was explicitly chosen by the
+	// user (via dialog or --agent flag), preventing session restore from
+	// overriding it.
+	agentExplicitlySet bool
+
 	// MegaCli extension panels
 	agentDashboard dashboard.Model
 	displayPanel   display.Model
@@ -435,6 +440,10 @@ func (m *UI) Init() tea.Cmd {
 	cmds = append(cmds, m.loadCustomCommands())
 	// load prompt history async
 	cmds = append(cmds, m.loadPromptHistory())
+	// If agent was set via --agent flag before UI init, mark it as explicit.
+	if m.com.Workspace.AgentCurrent() != config.AgentCoder {
+		m.agentExplicitlySet = true
+	}
 	// load initial session if specified
 	if cmd := m.loadInitialSession(); cmd != nil {
 		cmds = append(cmds, cmd)
@@ -596,12 +605,22 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if saved := strings.TrimSpace(m.session.ActiveAgent); saved != "" {
 			current := m.com.Workspace.AgentCurrent()
 			if saved != current {
-				if _, err := m.com.Workspace.AgentSwitch(context.Background(), saved); err != nil {
-					slog.Warn("Could not restore agent from session, using default",
-						"saved_agent", saved, "error", err)
-					cmds = append(cmds, util.ReportWarn(
-						fmt.Sprintf("Session agent %q no longer available, using %q",
-							saved, current)))
+				if m.agentExplicitlySet {
+					// User explicitly chose the current agent; update session
+					// to match rather than overriding.
+					m.session.ActiveAgent = current
+					if err := m.com.Workspace.UpdateSessionActiveAgent(
+						context.Background(), m.session.ID, current); err != nil {
+						slog.Error("Failed to update session active agent", "error", err)
+					}
+				} else {
+					if _, err := m.com.Workspace.AgentSwitch(context.Background(), saved); err != nil {
+						slog.Warn("Could not restore agent from session, using default",
+							"saved_agent", saved, "error", err)
+						cmds = append(cmds, util.ReportWarn(
+							fmt.Sprintf("Session agent %q no longer available, using %q",
+								saved, current)))
+					}
 				}
 			}
 		}
@@ -1449,6 +1468,7 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 	// Session dialog messages.
 	case dialog.ActionSelectSession:
 		m.dialog.CloseDialog(dialog.SessionsID)
+		m.agentExplicitlySet = false
 		cmds = append(cmds, m.loadSession(msg.Session.ID))
 
 	// Open dialog message.
@@ -1465,6 +1485,7 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 	case dialog.ActionSwitchAgent:
 		m.dialog.CloseDialog(dialog.AgentsID)
 		m.dialog.CloseDialog(dialog.CommandsID)
+		m.agentExplicitlySet = true
 		if m.session != nil {
 			m.session.ActiveAgent = msg.AgentID
 			if err := m.com.Workspace.UpdateSessionActiveAgent(

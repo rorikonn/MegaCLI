@@ -328,6 +328,11 @@ func (c *coordinator) Run(ctx context.Context, sessionID string, prompt string, 
 		}
 	}
 
+	// Apply deferred switch immediately after the run completes,
+	// so the user sees the new agent without needing to send
+	// another message.
+	c.applyPendingSwitch(ctx, sessionID)
+
 	return result, originalErr
 }
 
