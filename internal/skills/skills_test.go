@@ -451,18 +451,31 @@ func TestDiscoverBuiltin(t *testing.T) {
 	}
 	require.True(t, foundHooks, "megacli-hooks builtin skill not found")
 
-	var foundCreateAgent bool
+	var foundMegacliAgent bool
 	for _, s := range discovered {
-		if s.Name == "create-agent" {
-			foundCreateAgent = true
-			require.Equal(t, "crush://skills/create-agent/SKILL.md", s.SkillFilePath)
-			require.Equal(t, "crush://skills/create-agent", s.Path)
+		if s.Name == "megacli-agent" {
+			foundMegacliAgent = true
+			require.Equal(t, "crush://skills/megacli-agent/SKILL.md", s.SkillFilePath)
+			require.Equal(t, "crush://skills/megacli-agent", s.Path)
 			require.NotEmpty(t, s.Description)
 			require.NotEmpty(t, s.Instructions)
 			require.True(t, s.Builtin)
 		}
 	}
-	require.True(t, foundCreateAgent, "create-agent builtin skill not found")
+	require.True(t, foundMegacliAgent, "megacli-agent builtin skill not found")
+
+	var foundMegacliSkill bool
+	for _, s := range discovered {
+		if s.Name == "megacli-skill" {
+			foundMegacliSkill = true
+			require.Equal(t, "crush://skills/megacli-skill/SKILL.md", s.SkillFilePath)
+			require.Equal(t, "crush://skills/megacli-skill", s.Path)
+			require.NotEmpty(t, s.Description)
+			require.NotEmpty(t, s.Instructions)
+			require.True(t, s.Builtin)
+		}
+	}
+	require.True(t, foundMegacliSkill, "megacli-skill builtin skill not found")
 }
 
 func TestDeduplicate(t *testing.T) {

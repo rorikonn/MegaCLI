@@ -1394,6 +1394,14 @@ func discoverSkills(cfg *config.ConfigStore) (allSkills, activeSkills []*skills.
 		discovered = append(discovered, userSkills...)
 	}
 
+	// Collect agent-specific skill directories from folder-based agents.
+	for _, agentCfg := range cfg.Config().Agents {
+		if len(agentCfg.SkillsDirs) > 0 {
+			agentSkills := skills.Discover(agentCfg.SkillsDirs)
+			discovered = append(discovered, agentSkills...)
+		}
+	}
+
 	allSkills = skills.Deduplicate(discovered)
 	var disabledSkills []string
 	if opts != nil {

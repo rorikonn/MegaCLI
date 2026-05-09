@@ -31,12 +31,18 @@ var initializePromptTmpl []byte
 // promptForAgent builds a Prompt for the given agent config.
 // Resolution order:
 //  1. PromptFile (disk path) if set.
-//  2. Prompt (built-in template name) looked up in the embedded FS.
-//  3. Fallback to coder.md.tpl.
+//  2. PromptTemplate (inline template from AGENT.md.tpl) if set.
+//  3. Prompt (built-in template name) looked up in the embedded FS.
+//  4. Fallback to coder.md.tpl.
 func promptForAgent(agentCfg config.Agent, opts ...prompt.Option) (*prompt.Prompt, error) {
 	name := agentCfg.Prompt
 	if name == "" {
 		name = agentCfg.ID
+	}
+
+	// Inject agent-specific skill directories if present.
+	if len(agentCfg.SkillsDirs) > 0 {
+		opts = append(opts, prompt.WithSkillsDirs(agentCfg.SkillsDirs))
 	}
 
 	// PromptFile takes precedence: load from disk.
@@ -46,6 +52,11 @@ func promptForAgent(agentCfg config.Agent, opts ...prompt.Option) (*prompt.Promp
 			return nil, fmt.Errorf("reading prompt file %s: %w", agentCfg.PromptFile, err)
 		}
 		return prompt.NewPrompt(name, string(data), opts...)
+	}
+
+	// Inline template from folder-based AGENT.md.tpl.
+	if agentCfg.PromptTemplate != "" {
+		return prompt.NewPrompt(name, agentCfg.PromptTemplate, opts...)
 	}
 
 	// Look up built-in template by name.

@@ -18,12 +18,12 @@ import (
 	"testing"
 
 	"charm.land/catwalk/pkg/catwalk"
+	powernapConfig "github.com/charmbracelet/x/powernap/pkg/config"
 	"github.com/megacli/megacli/internal/agent/hyper"
 	"github.com/megacli/megacli/internal/csync"
 	"github.com/megacli/megacli/internal/env"
 	"github.com/megacli/megacli/internal/fsext"
 	"github.com/megacli/megacli/internal/home"
-	powernapConfig "github.com/charmbracelet/x/powernap/pkg/config"
 	"github.com/qjebbs/go-jsons"
 )
 
@@ -396,6 +396,8 @@ func (c *Config) configureProviders(store *ConfigStore, env env.Env, resolver Va
 }
 
 func (c *Config) setDefaults(workingDir, dataDir string) {
+	c.workingDir = workingDir
+
 	if c.Options == nil {
 		c.Options = &Options{}
 	}

@@ -25,6 +25,7 @@ type Prompt struct {
 	now        func() time.Time
 	platform   string
 	workingDir string
+	skillsDirs []string
 }
 
 type PromptDat struct {
@@ -63,6 +64,15 @@ func WithPlatform(platform string) Option {
 func WithWorkingDir(workingDir string) Option {
 	return func(p *Prompt) {
 		p.workingDir = workingDir
+	}
+}
+
+// WithSkillsDirs adds agent-specific skill directories to the prompt's
+// skill discovery. Skills found in these directories are merged with
+// global skills during prompt building.
+func WithSkillsDirs(dirs []string) Option {
+	return func(p *Prompt) {
+		p.skillsDirs = dirs
 	}
 }
 
@@ -188,6 +198,13 @@ func (p *Prompt) promptData(ctx context.Context, provider, model string, store *
 				slog.Warn("User skill overrides builtin skill", "name", userSkill.Name)
 			}
 			allSkills = append(allSkills, userSkill)
+		}
+	}
+
+	// Discover agent-specific skills from folder-based agent definitions.
+	if len(p.skillsDirs) > 0 {
+		for _, agentSkill := range skills.Discover(p.skillsDirs) {
+			allSkills = append(allSkills, agentSkill)
 		}
 	}
 

@@ -369,6 +369,15 @@ type Agent struct {
 	// PromptFile is a path to a custom .md.tpl template on disk.
 	// Takes precedence over Prompt when set.
 	PromptFile string `json:"prompt_file,omitempty" jsonschema:"description=Path to a custom prompt template file on disk"`
+
+	// PromptTemplate holds an inline Go template string parsed from an
+	// AGENT.md.tpl file. Takes precedence over Prompt but not PromptFile.
+	PromptTemplate string `json:"-"`
+
+	// SkillsDirs lists agent-specific skill directories discovered from
+	// folder-based agent definitions. These are merged into the global
+	// skill discovery at prompt build time.
+	SkillsDirs []string `json:"-"`
 }
 
 // EffectiveRole returns the agent's role, defaulting to primary.
@@ -461,6 +470,10 @@ type Config struct {
 
 	// Agents is the runtime agent registry, populated by SetupAgents().
 	Agents map[string]Agent `json:"-"`
+
+	// workingDir is set during setDefaults and used by SetupAgents to
+	// discover folder-based agent definitions.
+	workingDir string
 }
 
 // OrchestratorConfig defines the multi-agent orchestration settings.
@@ -644,11 +657,95 @@ func (c *Config) SetupAgents() {
 		},
 	}
 
+	// Merge folder-based agent definitions (global, then project).
+	// These have lower priority than megacli.json overrides.
+	c.mergeFolderAgents(agents, allowedTools)
+
 	// Merge user-defined agents from megacli.json and apply overrides to
 	// built-in agents.
 	c.mergeUserAgents(agents, allowedTools)
 
 	c.Agents = agents
+}
+
+// mergeFolderAgents discovers folder-based agent definitions from
+// global and project directories and merges them into the agents map.
+// Global agents are discovered first, then project agents override them.
+func (c *Config) mergeFolderAgents(agents map[string]Agent, allowedTools []string) {
+	// Global directories first (lowest priority among folder agents).
+	dirs := GlobalAgentDirs()
+	// Project directories second (override global).
+	if c.workingDir != "" {
+		dirs = append(dirs, ProjectAgentDirs(c.workingDir)...)
+	}
+
+	discovered := DiscoverAgentDirs(dirs)
+	for id, folderAgent := range discovered {
+		if existing, ok := agents[id]; ok {
+			// Folder agent overlays onto existing (builtin) agent.
+			if folderAgent.Name != "" {
+				existing.Name = folderAgent.Name
+			}
+			if folderAgent.Description != "" {
+				existing.Description = folderAgent.Description
+			}
+			if folderAgent.Role != "" {
+				existing.Role = folderAgent.Role
+			}
+			if folderAgent.Model != "" {
+				existing.Model = folderAgent.Model
+			}
+			if len(folderAgent.AllowedTools) > 0 {
+				existing.AllowedTools = folderAgent.AllowedTools
+			}
+			if len(folderAgent.AllowedMCP) > 0 {
+				existing.AllowedMCP = folderAgent.AllowedMCP
+			}
+			if len(folderAgent.ContextPaths) > 0 {
+				existing.ContextPaths = folderAgent.ContextPaths
+			}
+			if folderAgent.PromptTemplate != "" {
+				existing.PromptTemplate = folderAgent.PromptTemplate
+			}
+			if folderAgent.Disabled {
+				existing.Disabled = true
+			}
+			existing.SkillsDirs = append(existing.SkillsDirs, folderAgent.SkillsDirs...)
+			agents[id] = existing
+		} else {
+			// New agent from folder definition.
+			a := Agent{
+				ID:             id,
+				Name:           folderAgent.Name,
+				Description:    folderAgent.Description,
+				Role:           folderAgent.Role,
+				Model:          SelectedModelTypeLarge,
+				PromptTemplate: folderAgent.PromptTemplate,
+				ContextPaths:   c.Options.ContextPaths,
+				AllowedTools:   allowedTools,
+				SkillsDirs:     folderAgent.SkillsDirs,
+			}
+			if a.Name == "" {
+				a.Name = id
+			}
+			if folderAgent.Model != "" {
+				a.Model = folderAgent.Model
+			}
+			if len(folderAgent.AllowedTools) > 0 {
+				a.AllowedTools = folderAgent.AllowedTools
+			}
+			if len(folderAgent.AllowedMCP) > 0 {
+				a.AllowedMCP = folderAgent.AllowedMCP
+			}
+			if len(folderAgent.ContextPaths) > 0 {
+				a.ContextPaths = folderAgent.ContextPaths
+			}
+			if folderAgent.Disabled {
+				a.Disabled = true
+			}
+			agents[id] = a
+		}
+	}
 }
 
 // mergeUserAgents applies user-defined agent configurations from both
