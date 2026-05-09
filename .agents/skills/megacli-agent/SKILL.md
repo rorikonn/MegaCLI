@@ -46,6 +46,17 @@ agent definitions, prompt templates, or configuration. Instead:
 
 This ensures agents are portable across machines and users.
 
+## Path Convention
+
+Unless the user explicitly specifies a different location:
+
+- **Project-level**: place agent files under `.megacli/` in the project root
+  (e.g. `.megacli/agents/<id>/`, `.megacli/prompts/<id>.md.tpl`)
+- **User-level (global)**: place agent files under `~/.megacli/` (all platforms,
+  i.e. `$HOME/.megacli/agents/<id>/`)
+- **Alternatives**: `.agents/`, `.opencode/`, `.cursor/` are supported but
+  should only be used when the user explicitly requests them
+
 ## Step 2a: JSON Configuration (simple)
 
 Produce a JSON snippet for `megacli.json` under the `agents` key:
@@ -129,14 +140,14 @@ are only available to this agent.
 Folder-based agents are discovered from these directories:
 
 **Project-level:**
-- `.megacli/agents/`
-- `.agents/`
-- `.opencode/agents/`
+- `.megacli/agents/` **(default — use this unless user specifies otherwise)**
+- `.agents/` (alternative)
+- `.opencode/agents/` (alternative)
 
-**Global:**
-- `~/.config/megacli/agents/`
-- `~/.config/agents/`
-- `~/.config/opencode/agents/`
+**Global (user-level):**
+- `~/.megacli/agents/` **(default — all platforms, `$HOME/.megacli/agents/`)**
+- `~/.config/megacli/agents/` (legacy, still discovered)
+- `~/.config/agents/` (alternative)
 
 ### Priority (low to high)
 

@@ -440,16 +440,16 @@ func TestDiscoverBuiltin(t *testing.T) {
 
 	var foundHooks bool
 	for _, s := range discovered {
-		if s.Name == "megacli-hooks" {
+		if s.Name == "megacli-hook" {
 			foundHooks = true
-			require.Equal(t, "crush://skills/megacli-hooks/SKILL.md", s.SkillFilePath)
-			require.Equal(t, "crush://skills/megacli-hooks", s.Path)
+			require.Equal(t, "crush://skills/megacli-hook/SKILL.md", s.SkillFilePath)
+			require.Equal(t, "crush://skills/megacli-hook", s.Path)
 			require.NotEmpty(t, s.Description)
 			require.NotEmpty(t, s.Instructions)
 			require.True(t, s.Builtin)
 		}
 	}
-	require.True(t, foundHooks, "megacli-hooks builtin skill not found")
+	require.True(t, foundHooks, "megacli-hook builtin skill not found")
 
 	var foundMegacliAgent bool
 	for _, s := range discovered {

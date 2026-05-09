@@ -1,5 +1,5 @@
 ---
-name: megacli-hooks
+name: megacli-hook
 description: Use when the user wants to add, write, debug, or configure a MegaCLI hook — gating or blocking tool calls, approving or rewriting tool input before execution, injecting context into tool results, or troubleshooting hook behavior in megacli.json.
 ---
 
@@ -13,6 +13,14 @@ the sub-agent tool call itself is.
 
 For the full reference, see `docs/hooks/README.md`. This skill covers what you
 need to author correct hooks.
+
+## Path Convention
+
+Unless the user explicitly specifies a different location:
+
+- **Project-level**: place hook scripts under `.megacli/hooks/`
+- **User-level (global)**: place hook scripts under `~/.megacli/hooks/`
+- Hook configuration goes in `megacli.json` (project or global)
 
 ## Supported Events
 

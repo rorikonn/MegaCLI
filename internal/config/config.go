@@ -28,6 +28,8 @@ const (
 )
 
 var defaultContextPaths = []string{
+	".megacli/AGENTS.md",
+	".megacli/MEGACLI.md",
 	".github/copilot-instructions.md",
 	".cursorrules",
 	".cursor/rules/",

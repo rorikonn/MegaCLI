@@ -37,6 +37,16 @@ skill files. Instead:
 
 This ensures skills are portable across machines and users.
 
+## Path Convention
+
+Unless the user explicitly specifies a different location:
+
+- **Project-level**: place skill files under `.megacli/skills/` in the project root
+- **User-level (global)**: place skill files under `~/.megacli/skills/` (all platforms)
+- **Alternatives**: `.agents/skills/`, `.opencode/skills/`, `.cursor/skills/`,
+  `.claude/skills/` are supported but should only be used when the user
+  explicitly requests them
+
 ## Step 2: Choose Location
 
 Based on scope, create the skill directory:
@@ -47,7 +57,7 @@ Based on scope, create the skill directory:
 .megacli/skills/<skill-name>/SKILL.md
 ```
 
-Other supported project directories (all equivalent):
+Other supported project directories (use only if user specifies):
 - `.agents/skills/<skill-name>/SKILL.md`
 - `.claude/skills/<skill-name>/SKILL.md`
 - `.cursor/skills/<skill-name>/SKILL.md`
@@ -56,8 +66,12 @@ Other supported project directories (all equivalent):
 ### Global skill
 
 ```
-~/.config/megacli/skills/<skill-name>/SKILL.md
+~/.megacli/skills/<skill-name>/SKILL.md
 ```
+
+This is `$HOME/.megacli/skills/` on all platforms. Legacy path
+`~/.config/megacli/skills/` is still discovered but not recommended for
+new skills.
 
 Or override with the `MEGACLI_SKILLS_DIR` environment variable:
 ```
@@ -179,8 +193,8 @@ If a user skill has the same name as a builtin skill, the user skill wins
 Skills are discovered in this order (later overrides earlier):
 
 1. **Builtin skills** — embedded in the MegaCLI binary
-2. **Global skills** — `~/.config/megacli/skills/` (+ Windows AppData)
-3. **Project skills** — `.megacli/skills/`, `.agents/skills/`, etc.
+2. **Global skills** — `~/.megacli/skills/` (preferred), `~/.config/megacli/skills/` (legacy)
+3. **Project skills** — `.megacli/skills/` (preferred), `.agents/skills/`, etc.
 4. **Agent-specific skills** — `<agent-dir>/skills/`
 
 ### How Skills Are Used

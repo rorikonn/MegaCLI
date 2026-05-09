@@ -797,11 +797,23 @@ func hasAWSCredentials(env env.Env) bool {
 }
 
 // GlobalConfig returns the global configuration file path for the application.
+// Preferred location is ~/.megacli/megacli.json on all platforms. Falls back
+// to legacy XDG path only if the legacy file already exists.
 func GlobalConfig() string {
 	if globalCfg := os.Getenv("MEGACLI_GLOBAL_CONFIG"); globalCfg != "" {
 		return filepath.Join(globalCfg, fmt.Sprintf("%s.json", appName))
 	}
-	return filepath.Join(home.Config(), appName, fmt.Sprintf("%s.json", appName))
+	dotDir := filepath.Join(home.DotMegaCLI(), fmt.Sprintf("%s.json", appName))
+	if _, err := os.Stat(dotDir); err == nil {
+		return dotDir
+	}
+	// Fall back to legacy path only if it exists (backward compat).
+	legacyPath := filepath.Join(home.Config(), appName, fmt.Sprintf("%s.json", appName))
+	if _, err := os.Stat(legacyPath); err == nil {
+		return legacyPath
+	}
+	// New installations default to ~/.megacli/.
+	return dotDir
 }
 
 // GlobalCacheDir returns the path to the global cache directory for the
@@ -824,27 +836,39 @@ func GlobalCacheDir() string {
 }
 
 // GlobalConfigData returns the path to the main data directory for the application.
-// this config is used when the app overrides configurations instead of updating the global config.
+// This config is used when the app overrides configurations instead of updating
+// the global config. Preferred location is ~/.megacli/megacli.json.
 func GlobalConfigData() string {
 	if globalData := os.Getenv("MEGACLI_GLOBAL_DATA"); globalData != "" {
 		return filepath.Join(globalData, fmt.Sprintf("%s.json", appName))
 	}
-	if xdgDataHome := os.Getenv("XDG_DATA_HOME"); xdgDataHome != "" {
-		return filepath.Join(xdgDataHome, appName, fmt.Sprintf("%s.json", appName))
+	dotDir := filepath.Join(home.DotMegaCLI(), fmt.Sprintf("%s.json", appName))
+	if _, err := os.Stat(filepath.Dir(dotDir)); err == nil {
+		return dotDir
 	}
-
-	// return the path to the main data directory
-	// for windows, it should be in `%LOCALAPPDATA%/megacli/`
-	// for linux and macOS, it should be in `$HOME/.local/share/megacli/`
+	// Fall back to legacy paths only if they exist.
+	if xdgDataHome := os.Getenv("XDG_DATA_HOME"); xdgDataHome != "" {
+		legacyXDG := filepath.Join(xdgDataHome, appName, fmt.Sprintf("%s.json", appName))
+		if _, err := os.Stat(filepath.Dir(legacyXDG)); err == nil {
+			return legacyXDG
+		}
+	}
 	if runtime.GOOS == "windows" {
 		localAppData := cmp.Or(
 			os.Getenv("LOCALAPPDATA"),
 			filepath.Join(os.Getenv("USERPROFILE"), "AppData", "Local"),
 		)
-		return filepath.Join(localAppData, appName, fmt.Sprintf("%s.json", appName))
+		legacyWin := filepath.Join(localAppData, appName, fmt.Sprintf("%s.json", appName))
+		if _, err := os.Stat(filepath.Dir(legacyWin)); err == nil {
+			return legacyWin
+		}
 	}
-
-	return filepath.Join(home.Dir(), ".local", "share", appName, fmt.Sprintf("%s.json", appName))
+	legacyUnix := filepath.Join(home.Dir(), ".local", "share", appName, fmt.Sprintf("%s.json", appName))
+	if _, err := os.Stat(filepath.Dir(legacyUnix)); err == nil {
+		return legacyUnix
+	}
+	// New installations default to ~/.megacli/.
+	return dotDir
 }
 
 // GlobalWorkspaceDir returns the path to the global server workspace
@@ -873,20 +897,20 @@ func isInsideWorktree() bool {
 
 // GlobalSkillsDirs returns the default directories for Agent Skills.
 // Skills in these directories are auto-discovered and their files can be read
-// without permission prompts.
+// without permission prompts. ~/.megacli/skills/ is the preferred location.
 func GlobalSkillsDirs() []string {
 	if skillsDir := os.Getenv("MEGACLI_SKILLS_DIR"); skillsDir != "" {
 		return []string{skillsDir}
 	}
 
 	paths := []string{
+		filepath.Join(home.DotMegaCLI(), "skills"),
 		filepath.Join(home.Config(), appName, "skills"),
 		filepath.Join(home.Config(), "agents", "skills"),
 		filepath.Join(home.Config(), "opencode", "skills"),
 	}
 
-	// On Windows, also load from app data on top of `$HOME/.config/megacli`.
-	// This is here mostly for backwards compatibility.
+	// On Windows, also load from app data for backwards compatibility.
 	if runtime.GOOS == "windows" {
 		appData := cmp.Or(
 			os.Getenv("LOCALAPPDATA"),

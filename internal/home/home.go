@@ -30,6 +30,12 @@ func Config() string {
 	)
 }
 
+// DotMegaCLI returns the path to ~/.megacli/ — the preferred user-level
+// directory for config, agents, skills, and data on all platforms.
+func DotMegaCLI() string {
+	return filepath.Join(Dir(), ".megacli")
+}
+
 // Short replaces the actual home path from [Dir] with `~`.
 func Short(p string) string {
 	if homedir == "" || !strings.HasPrefix(p, homedir) {

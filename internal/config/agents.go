@@ -15,14 +15,30 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const agentDefFileName = "AGENT.md.tpl"
+// agentDefFileNames lists accepted agent definition file names in
+// priority order. The first match wins when scanning a directory.
+var agentDefFileNames = []string{"AGENT.md.tpl", "AGENT.md"}
+
+// findAgentDef returns the path to the first existing agent definition
+// file in dir, or an empty string if none is found.
+func findAgentDef(dir string) string {
+	for _, name := range agentDefFileNames {
+		p := filepath.Join(dir, name)
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
+}
 
 // agentDefFrontmatter holds the YAML frontmatter fields from an
-// AGENT.md.tpl file. Fields mirror config.Agent but use YAML tags.
+// AGENT.md.tpl (or AGENT.md) file. Fields mirror config.Agent but
+// use YAML tags.
 type agentDefFrontmatter struct {
 	Name         string              `yaml:"name"`
 	Description  string              `yaml:"description"`
 	Role         AgentRole           `yaml:"role"`
+	Mode         AgentRole           `yaml:"mode"`
 	Model        SelectedModelType   `yaml:"model"`
 	Disabled     bool                `yaml:"disabled"`
 	AllowedTools []string            `yaml:"allowed_tools"`
@@ -30,15 +46,41 @@ type agentDefFrontmatter struct {
 	ContextPaths []string            `yaml:"context_paths"`
 }
 
-// ParseAgentDef parses an AGENT.md.tpl file from disk and returns an
-// Agent with PromptTemplate populated from the body. The agent ID is
-// derived from the parent directory name.
+// ParseAgentDef parses an AGENT.md.tpl (or AGENT.md) file from disk
+// and returns an Agent with PromptTemplate populated from the body.
+// The agent ID is derived from the parent directory name.
 func ParseAgentDef(path string) (Agent, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return Agent{}, err
 	}
 	return ParseAgentDefContent(content, filepath.Base(filepath.Dir(path)))
+}
+
+// ParseAgentDefFile parses a standalone agent definition file (e.g.
+// subagents/my-agent.md) and returns an Agent. The id parameter is
+// used directly as the agent ID.
+func ParseAgentDefFile(path, id string) (Agent, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return Agent{}, err
+	}
+	return ParseAgentDefContent(content, id)
+}
+
+// subagentIDFromFile extracts the agent ID from a file name by
+// stripping known suffixes (.md.tpl, .md). Returns the id and true
+// if the file had a recognised suffix, or ("", false) otherwise.
+func subagentIDFromFile(filename string) (string, bool) {
+	for _, suffix := range []string{".md.tpl", ".md"} {
+		if strings.HasSuffix(filename, suffix) {
+			id := strings.TrimSuffix(filename, suffix)
+			if id != "" {
+				return id, true
+			}
+		}
+	}
+	return "", false
 }
 
 // ParseAgentDefContent parses an AGENT.md.tpl from raw bytes. The id
@@ -52,6 +94,11 @@ func ParseAgentDefContent(content []byte, id string) (Agent, error) {
 	var def agentDefFrontmatter
 	if err := yaml.Unmarshal([]byte(frontmatter), &def); err != nil {
 		return Agent{}, fmt.Errorf("parsing agent frontmatter: %w", err)
+	}
+
+	// Allow "mode" as an alias for "role"; "role" takes precedence.
+	if def.Role == "" && def.Mode != "" {
+		def.Role = def.Mode
 	}
 
 	agent := Agent{
@@ -98,10 +145,16 @@ func splitAgentFrontmatter(content string) (frontmatter, body string, err error)
 	return frontmatter, body, nil
 }
 
-// DiscoverAgentDirs scans the given directories for agent folder
+// DiscoverAgentDirs scans the given directories for agent
 // definitions. Each immediate subdirectory containing an AGENT.md.tpl
-// file is parsed as an agent definition. Agent-specific skills/ and
-// subagents/ subdirectories are automatically attached.
+// or AGENT.md file is parsed as an agent definition. Agent-specific
+// skills/ and subagents/ subdirectories are automatically attached.
+//
+// Subagents may be defined as either:
+//   - A subdirectory of subagents/ containing an AGENT.md.tpl or
+//     AGENT.md file (folder format).
+//   - A standalone .md or .md.tpl file directly inside subagents/
+//     (file format). The agent ID is derived from the file name.
 //
 // Later entries in dirs override earlier ones when agent IDs collide.
 func DiscoverAgentDirs(dirs []string) map[string]Agent {
@@ -120,9 +173,8 @@ func DiscoverAgentDirs(dirs []string) map[string]Agent {
 				continue
 			}
 			agentDir := filepath.Join(dir, entry.Name())
-			defPath := filepath.Join(agentDir, agentDefFileName)
-
-			if _, err := os.Stat(defPath); err != nil {
+			defPath := findAgentDef(agentDir)
+			if defPath == "" {
 				continue
 			}
 
@@ -140,27 +192,7 @@ func DiscoverAgentDirs(dirs []string) map[string]Agent {
 			}
 
 			// Discover subagents from the subagents/ subdirectory.
-			subagentsDir := filepath.Join(agentDir, "subagents")
-			subEntries, err := os.ReadDir(subagentsDir)
-			if err == nil {
-				for _, subEntry := range subEntries {
-					if !subEntry.IsDir() {
-						continue
-					}
-					subDefPath := filepath.Join(subagentsDir, subEntry.Name(), agentDefFileName)
-					if _, err := os.Stat(subDefPath); err != nil {
-						continue
-					}
-					subAgent, err := ParseAgentDef(subDefPath)
-					if err != nil {
-						slog.Warn("Failed to parse subagent definition",
-							"path", subDefPath, "error", err)
-						continue
-					}
-					subAgent.Role = AgentRoleSubagent
-					agents[subAgent.ID] = subAgent
-				}
-			}
+			discoverSubagents(agentDir, agents)
 
 			slog.Debug("Discovered folder-based agent",
 				"id", agent.ID, "dir", agentDir)
@@ -168,6 +200,50 @@ func DiscoverAgentDirs(dirs []string) map[string]Agent {
 		}
 	}
 	return agents
+}
+
+// discoverSubagents scans agentDir/subagents/ for subagent
+// definitions in both folder and file format.
+func discoverSubagents(agentDir string, agents map[string]Agent) {
+	subagentsDir := filepath.Join(agentDir, "subagents")
+	subEntries, err := os.ReadDir(subagentsDir)
+	if err != nil {
+		return
+	}
+
+	for _, subEntry := range subEntries {
+		if subEntry.IsDir() {
+			// Folder-based subagent: subagents/<name>/AGENT.md(.tpl).
+			subDefPath := findAgentDef(filepath.Join(subagentsDir, subEntry.Name()))
+			if subDefPath == "" {
+				continue
+			}
+			subAgent, err := ParseAgentDef(subDefPath)
+			if err != nil {
+				slog.Warn("Failed to parse subagent definition",
+					"path", subDefPath, "error", err)
+				continue
+			}
+			subAgent.Role = AgentRoleSubagent
+			agents[subAgent.ID] = subAgent
+			continue
+		}
+
+		// File-based subagent: subagents/<name>.md or <name>.md.tpl.
+		id, ok := subagentIDFromFile(subEntry.Name())
+		if !ok {
+			continue
+		}
+		filePath := filepath.Join(subagentsDir, subEntry.Name())
+		subAgent, err := ParseAgentDefFile(filePath, id)
+		if err != nil {
+			slog.Warn("Failed to parse subagent file",
+				"path", filePath, "error", err)
+			continue
+		}
+		subAgent.Role = AgentRoleSubagent
+		agents[subAgent.ID] = subAgent
+	}
 }
 
 // ProjectAgentDirs returns the project-level directories to scan for
@@ -181,9 +257,11 @@ func ProjectAgentDirs(workingDir string) []string {
 }
 
 // GlobalAgentDirs returns the global directories to scan for
-// folder-based agent definitions.
+// folder-based agent definitions. ~/.megacli/agents/ is the preferred
+// location on all platforms.
 func GlobalAgentDirs() []string {
 	paths := []string{
+		filepath.Join(home.DotMegaCLI(), "agents"),
 		filepath.Join(home.Config(), appName, "agents"),
 		filepath.Join(home.Config(), "agents"),
 		filepath.Join(home.Config(), "opencode", "agents"),

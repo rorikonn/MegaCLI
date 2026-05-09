@@ -40,5 +40,5 @@ These are always available without user configuration.
 | `megacli-agent`  | `builtin/megacli-agent/`  | Creating agents and subagents              |
 | `megacli-skill`  | `builtin/megacli-skill/`  | Creating Agent Skills (SKILL.md files)     |
 | `megacli-config` | `builtin/megacli-config/` | MegaCLI configuration help                 |
-| `megacli-hooks`  | `builtin/megacli-hooks/`  | Authoring, configuring and debugging hooks |
+| `megacli-hook`   | `builtin/megacli-hook/`   | Authoring, configuring and debugging hooks |
 | `json-processor` | `builtin/json-processor/` | Built-in JSON processor (jq via gojq)      |

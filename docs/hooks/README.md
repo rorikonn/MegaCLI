@@ -15,7 +15,7 @@ forward.
 - Hooks just shell commands
 - Hooks can be written in any language because they’re just executables: Bash, Python, Node, Rust, Haskell, whatever
 - Hooks are Claude Code-compatible
-- MegaCLI ships with a builtin `megacli-hooks` skill to write, edit, and configure
+- MegaCLI ships with a builtin `megacli-hook` skill to write, edit, and configure
   hooks; just tell MegaCLI how to configure MegaCLI
 - MegaCLI currently supports just one hook, `PreToolUse`, with plans to support
   the full gamut; please let us know which hooks you'd like to see next
