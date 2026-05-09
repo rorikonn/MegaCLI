@@ -36,17 +36,10 @@ func (m *UI) agentInfo(width int) string {
 func (m *UI) modelInfo(width int) string {
 	model := m.selectedLargeModel()
 	smallModel := m.selectedSmallModel()
-	providerName := ""
 
 	var largeModelName string
 	if model != nil {
 		largeModelName = common.ModelDisplayName(model.CatwalkCfg, model.ModelCfg)
-
-		// Get provider name
-		providerConfig, ok := m.com.Config().Providers.Get(model.ModelCfg.Provider)
-		if ok {
-			providerName = providerConfig.Name
-		}
 	}
 
 	var smallModelName string
@@ -72,7 +65,7 @@ func (m *UI) modelInfo(width int) string {
 		}
 	}
 
-	return common.ModelInfo(m.com.Styles, largeModelName, smallModelName, providerName, modelContext, width, m.hyperCredits)
+	return common.ModelInfo(m.com.Styles, largeModelName, smallModelName, "", modelContext, width, m.hyperCredits)
 }
 
 // getDynamicHeightLimits will give us the num of items to show in each section based on the height

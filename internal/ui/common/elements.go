@@ -66,9 +66,6 @@ func ModelDisplayName(model catwalk.Model, cfg config.SelectedModel) string {
 	}
 
 	if effort == "" && !cfg.Think {
-		if len(model.ReasoningLevels) > 0 && model.DefaultReasoningEffort != "" {
-			return name + "-thinking-" + model.DefaultReasoningEffort
-		}
 		return name
 	}
 	if effort == "on" || (cfg.Think && effort == "") {

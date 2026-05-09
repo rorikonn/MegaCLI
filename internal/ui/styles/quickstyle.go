@@ -782,7 +782,7 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.ModelInfo.Name = lipgloss.NewStyle().Foreground(o.fgBase)
 	s.ModelInfo.Provider = lipgloss.NewStyle().Foreground(o.fgMoreSubtle)
 	s.ModelInfo.ProviderFallback = lipgloss.NewStyle().Foreground(o.fgMoreSubtle).PaddingLeft(2)
-	s.ModelInfo.Reasoning = lipgloss.NewStyle().Foreground(o.fgMostSubtle).PaddingLeft(2)
+	s.ModelInfo.Reasoning = lipgloss.NewStyle().Foreground(o.fgMostSubtle)
 	s.ModelInfo.TokenCount = lipgloss.NewStyle().Foreground(o.fgMostSubtle)
 	s.ModelInfo.TokenPercentage = lipgloss.NewStyle().Foreground(o.fgMoreSubtle)
 	s.ModelInfo.Cost = lipgloss.NewStyle().Foreground(o.fgMoreSubtle)
