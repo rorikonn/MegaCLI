@@ -160,6 +160,20 @@ type (
 	creditsUpdatedMsg struct {
 		credits int
 	}
+
+	// pastePathMsg is returned by async file-type probes when the file
+	// is not a recognized attachment type and should be inserted into
+	// the textarea as a plain path.
+	pastePathMsg struct {
+		path string
+	}
+
+	// fileAttachedMsg wraps an attachment with an optional size
+	// warning shown to the user.
+	fileAttachedMsg struct {
+		attachment message.Attachment
+		warning    string
+	}
 )
 
 // UI represents the main user interface model.
@@ -978,6 +992,15 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.PasteMsg:
 		if cmd := m.handlePasteMsg(msg); cmd != nil {
 			cmds = append(cmds, cmd)
+		}
+	case pastePathMsg:
+		prevHeight := m.textarea.Height()
+		cmds = append(cmds, m.updateTextareaWithPrevHeight(
+			tea.PasteMsg{Content: msg.path}, prevHeight))
+	case fileAttachedMsg:
+		_ = m.attachments.Update(msg.attachment)
+		if msg.warning != "" {
+			m.status.SetInfoMsg(util.NewInfoMsg(msg.warning))
 		}
 	case openEditorMsg:
 		prevHeight := m.textarea.Height()
@@ -4315,12 +4338,15 @@ func (m *UI) handlePasteMsg(msg tea.PasteMsg) tea.Cmd {
 		}
 	}
 
-	// Attempt to parse pasted content as file paths. If possible to parse,
-	// all files exist and are valid, add as attachments.
-	// Otherwise, paste as text.
+	// Attempt to parse pasted content as file paths.
+	// Each path is handled independently based on its file type:
+	//  - recognized attachment type + model supports it → attach
+	//  - recognized attachment type + model lacks support → warn
+	//  - unrecognized type → paste path as text
 	paths := fsext.ParsePastedFiles(msg.Content)
 	slog.Info("handlePasteMsg: parsed paths", "paths", paths)
-	allExistsAndValid := func() bool {
+
+	allExist := func() bool {
 		if len(paths) == 0 {
 			return false
 		}
@@ -4329,33 +4355,44 @@ func (m *UI) handlePasteMsg(msg tea.PasteMsg) tea.Cmd {
 				slog.Info("handlePasteMsg: path does not exist", "path", path)
 				return false
 			}
-
-			lowerPath := strings.ToLower(path)
-			isValid := false
-			for _, ext := range common.AllowedImageTypes {
-				if strings.HasSuffix(lowerPath, ext) {
-					isValid = true
-					break
-				}
-			}
-			if !isValid {
-				slog.Info("handlePasteMsg: path extension not allowed", "path", path)
-				return false
-			}
 		}
 		return true
 	}
-	if !allExistsAndValid() {
-		slog.Info("handlePasteMsg: pasting as text (not valid image paths)")
+	if !allExist() {
+		slog.Info("handlePasteMsg: pasting as text (not all paths exist)")
 		prevHeight := m.textarea.Height()
 		return m.updateTextareaWithPrevHeight(msg, prevHeight)
 	}
 
-	slog.Info("handlePasteMsg: attaching image files", "paths", paths)
 	var cmds []tea.Cmd
+	supportsImages := m.currentModelSupportsImages()
+
 	for _, path := range paths {
-		cmds = append(cmds, m.handleFilePathPaste(path))
+		ext := strings.ToLower(filepath.Ext(path))
+		info, isAttachable := common.LookupAttachmentType(ext)
+
+		switch {
+		case isAttachable && info.NeedsImageSupport && !supportsImages:
+			slog.Info("handlePasteMsg: model does not support this attachment type", "path", path, "ext", ext)
+			cmds = append(cmds, func() tea.Msg {
+				return util.ReportWarn(fmt.Sprintf("Current model does not support %s attachments", ext))
+			})
+
+		case isAttachable:
+			slog.Info("handlePasteMsg: attaching file", "path", path, "ext", ext)
+			cmds = append(cmds, m.handleFilePathPaste(path))
+
+		default:
+			slog.Info("handlePasteMsg: unknown type, probing MIME", "path", path, "ext", ext)
+			cmds = append(cmds, m.handleUnknownFilePaste(path))
+		}
 	}
+
+	if len(cmds) == 0 {
+		prevHeight := m.textarea.Height()
+		return m.updateTextareaWithPrevHeight(msg, prevHeight)
+	}
+
 	return tea.Batch(cmds...)
 }
 
@@ -4373,6 +4410,51 @@ func hasPasteExceededThreshold(msg tea.PasteMsg) bool {
 		}
 	}
 	return false
+}
+
+// handleUnknownFilePaste probes a file whose extension is not in
+// AllowedAttachmentTypes. If the content looks like text (text/* MIME),
+// it is attached; otherwise the path is pasted into the textarea.
+func (m *UI) handleUnknownFilePaste(path string) tea.Cmd {
+	return func() tea.Msg {
+		fileInfo, err := os.Stat(path)
+		if err != nil {
+			return pastePathMsg{path: path}
+		}
+		if fileInfo.IsDir() {
+			return pastePathMsg{path: path}
+		}
+		if fileInfo.Size() > common.MaxAttachmentSize {
+			return util.ReportWarn("File is too big (>5mb)")
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return pastePathMsg{path: path}
+		}
+
+		mimeBufferSize := min(512, len(content))
+		mimeType := http.DetectContentType(content[:mimeBufferSize])
+		if !strings.HasPrefix(mimeType, "text/") {
+			return pastePathMsg{path: path}
+		}
+
+		fileName := filepath.Base(path)
+		att := message.Attachment{
+			FilePath: path,
+			FileName: fileName,
+			MimeType: mimeType,
+			Content:  content,
+		}
+
+		if fileInfo.Size() > common.LargeAttachmentThreshold {
+			return fileAttachedMsg{
+				attachment: att,
+				warning:    fmt.Sprintf("Attached %s (%s)", fileName, common.FormatFileSize(fileInfo.Size())),
+			}
+		}
+		return att
+	}
 }
 
 // handleFilePathPaste handles a pasted file path.
@@ -4397,12 +4479,20 @@ func (m *UI) handleFilePathPaste(path string) tea.Cmd {
 		mimeBufferSize := min(512, len(content))
 		mimeType := http.DetectContentType(content[:mimeBufferSize])
 		fileName := filepath.Base(path)
-		return message.Attachment{
+		att := message.Attachment{
 			FilePath: path,
 			FileName: fileName,
 			MimeType: mimeType,
 			Content:  content,
 		}
+
+		if fileInfo.Size() > common.LargeAttachmentThreshold {
+			return fileAttachedMsg{
+				attachment: att,
+				warning:    fmt.Sprintf("Attached %s (%s)", fileName, common.FormatFileSize(fileInfo.Size())),
+			}
+		}
+		return att
 	}
 }
 
