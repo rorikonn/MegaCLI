@@ -123,6 +123,47 @@ This agent is disabled.`,
 				PromptTemplate: "This agent is disabled.",
 			},
 		},
+		{
+			name: "mode as alias for role",
+			content: `---
+name: Mode Agent
+description: Uses mode field
+mode: primary
+model: large
+---
+
+Mode prompt.`,
+			id: "mode-agent",
+			want: Agent{
+				ID:             "mode-agent",
+				Name:           "Mode Agent",
+				Description:    "Uses mode field",
+				Role:           AgentRolePrimary,
+				Model:          SelectedModelTypeLarge,
+				PromptTemplate: "Mode prompt.",
+			},
+		},
+		{
+			name: "role takes precedence over mode",
+			content: `---
+name: Both Fields
+description: Has both role and mode
+role: subagent
+mode: primary
+model: small
+---
+
+Both fields prompt.`,
+			id: "both",
+			want: Agent{
+				ID:             "both",
+				Name:           "Both Fields",
+				Description:    "Has both role and mode",
+				Role:           AgentRoleSubagent,
+				Model:          SelectedModelTypeSmall,
+				PromptTemplate: "Both fields prompt.",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -236,6 +277,113 @@ func TestDiscoverAgentDirs(t *testing.T) {
 
 		agents := DiscoverAgentDirs([]string{root})
 		assert.Empty(t, agents)
+	})
+
+	t.Run("discovers AGENT.md without tpl extension", func(t *testing.T) {
+		t.Parallel()
+		root := t.TempDir()
+
+		agentDir := filepath.Join(root, "md-agent")
+		require.NoError(t, os.MkdirAll(agentDir, 0o755))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(agentDir, "AGENT.md"),
+			[]byte("---\nname: MD Agent\ndescription: Uses .md\nmode: primary\nmodel: large\n---\n\nMD prompt."),
+			0o644,
+		))
+
+		agents := DiscoverAgentDirs([]string{root})
+		agent, ok := agents["md-agent"]
+		require.True(t, ok, "md-agent should be discovered via AGENT.md")
+		assert.Equal(t, "MD Agent", agent.Name)
+		assert.Equal(t, AgentRolePrimary, agent.Role)
+		assert.Equal(t, "MD prompt.", agent.PromptTemplate)
+	})
+
+	t.Run("AGENT.md.tpl takes precedence over AGENT.md", func(t *testing.T) {
+		t.Parallel()
+		root := t.TempDir()
+
+		agentDir := filepath.Join(root, "both-files")
+		require.NoError(t, os.MkdirAll(agentDir, 0o755))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(agentDir, "AGENT.md.tpl"),
+			[]byte("---\nname: TPL Wins\ndescription: From tpl\n---\n\nTPL prompt."),
+			0o644,
+		))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(agentDir, "AGENT.md"),
+			[]byte("---\nname: MD Loses\ndescription: From md\n---\n\nMD prompt."),
+			0o644,
+		))
+
+		agents := DiscoverAgentDirs([]string{root})
+		agent, ok := agents["both-files"]
+		require.True(t, ok)
+		assert.Equal(t, "TPL Wins", agent.Name, "AGENT.md.tpl should take precedence")
+	})
+
+	t.Run("discovers file-based subagents", func(t *testing.T) {
+		t.Parallel()
+		root := t.TempDir()
+
+		agentDir := filepath.Join(root, "parent")
+		require.NoError(t, os.MkdirAll(agentDir, 0o755))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(agentDir, "AGENT.md"),
+			[]byte("---\nname: Parent\ndescription: Parent agent\nmode: primary\n---\n\nParent prompt."),
+			0o644,
+		))
+
+		// File-based subagent with .md extension.
+		subDir := filepath.Join(agentDir, "subagents")
+		require.NoError(t, os.MkdirAll(subDir, 0o755))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(subDir, "file-helper.md"),
+			[]byte("---\nname: File Helper\ndescription: A file subagent\nmodel: small\n---\n\nFile help."),
+			0o644,
+		))
+
+		// File-based subagent with .md.tpl extension.
+		require.NoError(t, os.WriteFile(
+			filepath.Join(subDir, "tpl-helper.md.tpl"),
+			[]byte("---\nname: TPL Helper\ndescription: A tpl subagent\nmodel: small\n---\n\nTPL help."),
+			0o644,
+		))
+
+		// Folder-based subagent alongside file-based ones.
+		folderSubDir := filepath.Join(subDir, "folder-helper")
+		require.NoError(t, os.MkdirAll(folderSubDir, 0o755))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(folderSubDir, "AGENT.md"),
+			[]byte("---\nname: Folder Helper\ndescription: A folder subagent\nmodel: small\n---\n\nFolder help."),
+			0o644,
+		))
+
+		agents := DiscoverAgentDirs([]string{root})
+
+		// Parent agent.
+		parent, ok := agents["parent"]
+		require.True(t, ok, "parent agent should be discovered")
+		assert.Equal(t, "Parent", parent.Name)
+
+		// File-based .md subagent.
+		fileSub, ok := agents["file-helper"]
+		require.True(t, ok, "file-helper subagent should be discovered")
+		assert.Equal(t, "File Helper", fileSub.Name)
+		assert.Equal(t, AgentRoleSubagent, fileSub.Role)
+		assert.Equal(t, "File help.", fileSub.PromptTemplate)
+
+		// File-based .md.tpl subagent.
+		tplSub, ok := agents["tpl-helper"]
+		require.True(t, ok, "tpl-helper subagent should be discovered")
+		assert.Equal(t, "TPL Helper", tplSub.Name)
+		assert.Equal(t, AgentRoleSubagent, tplSub.Role)
+
+		// Folder-based subagent.
+		folderSub, ok := agents["folder-helper"]
+		require.True(t, ok, "folder-helper subagent should be discovered")
+		assert.Equal(t, "Folder Helper", folderSub.Name)
+		assert.Equal(t, AgentRoleSubagent, folderSub.Role)
 	})
 
 	t.Run("nonexistent directory is silently skipped", func(t *testing.T) {
