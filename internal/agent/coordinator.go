@@ -144,6 +144,13 @@ type coordinator struct {
 	activeSkills []*skills.Skill // Post-filter: active skills only.
 	skillTracker *skills.Tracker
 
+	// baseSkillStates holds builtin + user skill states (everything
+	// outside agent folders). On agent switch we combine these with
+	// the new agent's folder-specific states and re-publish so the
+	// UI reflects the correct set.
+	baseSkillStates  []*skills.SkillState
+	agentSkillStates map[string][]*skills.SkillState
+
 	// extraTools are injected by the app layer (e.g. MegaTool wrappers, delegate tools).
 	extraTools []fantasy.AgentTool
 
@@ -163,8 +170,8 @@ func NewCoordinator(
 	notify pubsub.Publisher[notify.Notification],
 ) (Coordinator, error) {
 	// Discover skills once at session start.
-	allSkills, activeSkills := discoverSkills(cfg)
-	skillTracker := skills.NewTracker(activeSkills)
+	result := discoverSkills(cfg, config.AgentCoder)
+	skillTracker := skills.NewTracker(result.activeSkills)
 
 	c := &coordinator{
 		cfg:              cfg,
@@ -179,9 +186,11 @@ func NewCoordinator(
 		agents:           make(map[string]SessionAgent),
 		agentDefs:        cfg.Config().Agents,
 		currentAgentName: csync.NewValue(config.AgentCoder),
-		allSkills:        allSkills,
-		activeSkills:     activeSkills,
+		allSkills:        result.allSkills,
+		activeSkills:     result.activeSkills,
 		skillTracker:     skillTracker,
+		baseSkillStates:  result.baseStates,
+		agentSkillStates: result.agentStates,
 	}
 
 	agentCfg, ok := c.agentDefs[config.AgentCoder]
@@ -1180,6 +1189,12 @@ func (c *coordinator) applySwitchAgent(ctx context.Context, name string) error {
 	c.currentAllowedTools.SetSlice(agentCfg.AllowedTools)
 	c.currentModelType.Set(agentCfg.Model)
 
+	// Re-publish skill states so the UI shows base skills plus only
+	// the new agent's folder-specific skills.
+	combined := append([]*skills.SkillState(nil), c.baseSkillStates...)
+	combined = append(combined, c.agentSkillStates[name]...)
+	skills.PublishStates(combined)
+
 	c.currentAgentName.Set(name)
 	slog.Info("Switched agent", "agent", name)
 	return nil
@@ -1372,9 +1387,24 @@ func (c *coordinator) updateParentSessionCost(ctx context.Context, childSessionI
 // pre-filter (all discovered, after dedup) and post-filter (active) lists.
 // It also emits a single diagnostic log line summarising the outcome to
 // help track skill-loading health over time.
-func discoverSkills(cfg *config.ConfigStore) (allSkills, activeSkills []*skills.Skill) {
+// discoverSkillsResult holds the outcome of skill discovery. The
+// baseStates field contains builtin + user states (always visible),
+// while agentStates maps each agent ID to its folder-specific states
+// so the coordinator can re-publish the correct subset on agent
+// switches.
+type discoverSkillsResult struct {
+	allSkills   []*skills.Skill
+	activeSkills []*skills.Skill
+	baseStates  []*skills.SkillState
+	agentStates map[string][]*skills.SkillState
+}
+
+func discoverSkills(cfg *config.ConfigStore, initialAgent string) discoverSkillsResult {
 	builtin, builtinStates := skills.DiscoverBuiltinWithStates()
 	discovered := append([]*skills.Skill(nil), builtin...)
+
+	var baseStates []*skills.SkillState
+	baseStates = append(baseStates, builtinStates...)
 
 	var userStates []*skills.SkillState
 	var userPaths []string
@@ -1394,25 +1424,40 @@ func discoverSkills(cfg *config.ConfigStore) (allSkills, activeSkills []*skills.
 		var userSkills []*skills.Skill
 		userSkills, userStates = skills.DiscoverWithStates(userPaths)
 		discovered = append(discovered, userSkills...)
+		baseStates = append(baseStates, userStates...)
 	}
 
-	// Collect agent-specific skill directories from folder-based agents.
-	for _, agentCfg := range cfg.Config().Agents {
+	// Collect agent-specific skill directories from folder-based
+	// agents, keyed by agent ID so we can publish the right subset
+	// when the active agent changes.
+	agentStatesMap := make(map[string][]*skills.SkillState)
+	for id, agentCfg := range cfg.Config().Agents {
 		if len(agentCfg.SkillsDirs) > 0 {
-			agentSkills := skills.Discover(agentCfg.SkillsDirs)
+			agentSkills, agentSt := skills.DiscoverWithStates(agentCfg.SkillsDirs)
 			discovered = append(discovered, agentSkills...)
+			agentStatesMap[id] = agentSt
 		}
 	}
 
-	allSkills = skills.Deduplicate(discovered)
+	allSkills := skills.Deduplicate(discovered)
 	var disabledSkills []string
 	if opts != nil {
 		disabledSkills = opts.DisabledSkills
 	}
-	activeSkills = skills.Filter(allSkills, disabledSkills)
+	activeSkills := skills.Filter(allSkills, disabledSkills)
+
+	// Publish base + initial agent's states.
+	combined := append([]*skills.SkillState(nil), baseStates...)
+	combined = append(combined, agentStatesMap[initialAgent]...)
+	skills.PublishStates(combined)
 
 	logDiscoveryStats(builtin, builtinStates, userStates, userPaths, allSkills, activeSkills, disabledSkills)
-	return allSkills, activeSkills
+	return discoverSkillsResult{
+		allSkills:    allSkills,
+		activeSkills: activeSkills,
+		baseStates:   baseStates,
+		agentStates:  agentStatesMap,
+	}
 }
 
 // logTurnSkillUsage emits a per-turn diagnostic line showing which skills

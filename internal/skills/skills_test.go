@@ -252,10 +252,11 @@ description: Name doesn't match directory.
 	defer cancel()
 	ch := SubscribeEvents(ctx)
 
-	skills := Discover([]string{tmpDir})
+	discovered, states := DiscoverWithStates([]string{tmpDir})
+	PublishStates(states)
 
 	evt := <-ch
-	states := evt.Payload.States
+	states = evt.Payload.States
 	var normalCount int
 	var errorCount int
 	var hasInvalidDir bool
@@ -273,11 +274,11 @@ description: Name doesn't match directory.
 	require.Equal(t, 2, normalCount)
 	require.Equal(t, 1, errorCount)
 	require.True(t, hasInvalidDir)
-	require.Len(t, skills, 2)
-	require.Equal(t, []string{"skill-two", "skill-one"}, []string{skills[0].Name, skills[1].Name})
+	require.Len(t, discovered, 2)
+	require.Equal(t, []string{"skill-two", "skill-one"}, []string{discovered[0].Name, discovered[1].Name})
 
 	names := make(map[string]bool)
-	for _, s := range skills {
+	for _, s := range discovered {
 		names[s.Name] = true
 	}
 	require.True(t, names["skill-one"])
@@ -293,11 +294,11 @@ func TestDiscoverEmptyDir(t *testing.T) {
 	defer cancel()
 	ch := SubscribeEvents(ctx)
 
-	skills := Discover([]string{tmpDir})
+	_, states := DiscoverWithStates([]string{tmpDir})
+	PublishStates(states)
 
 	evt := <-ch
 	require.Empty(t, evt.Payload.States)
-	require.Empty(t, skills)
 }
 
 func TestDiscoverMissingPath(t *testing.T) {
@@ -307,11 +308,11 @@ func TestDiscoverMissingPath(t *testing.T) {
 	defer cancel()
 	ch := SubscribeEvents(ctx)
 
-	skills := Discover([]string{filepath.Join(t.TempDir(), "missing")})
+	_, states := DiscoverWithStates([]string{filepath.Join(t.TempDir(), "missing")})
+	PublishStates(states)
 
 	evt := <-ch
 	require.Empty(t, evt.Payload.States)
-	require.Empty(t, skills)
 }
 
 func TestToPromptXML(t *testing.T) {

@@ -193,8 +193,10 @@ func Discover(paths []string) []*Skill {
 }
 
 // DiscoverWithStates finds all valid skills in the given paths and also
-// returns a per-file state slice describing parse/validation outcomes. Useful
-// for diagnostics and UI reporting.
+// returns a per-file state slice describing parse/validation outcomes.
+// This is a pure function: it does NOT update the global latestStates
+// or publish events. Callers that need UI updates should aggregate
+// states from multiple passes and call PublishStates once.
 func DiscoverWithStates(paths []string) ([]*Skill, []*SkillState) {
 	var skills []*Skill
 	var states []*SkillState
@@ -269,12 +271,18 @@ func DiscoverWithStates(paths []string) ([]*Skill, []*SkillState) {
 		return left < right
 	})
 
+	return skills, states
+}
+
+// PublishStates sets the global latestStates and broadcasts an event so
+// the UI can refresh. This should be called once after aggregating states
+// from all discovery passes (builtin, user, agent-specific).
+func PublishStates(states []*SkillState) {
 	latestStatesMu.Lock()
 	latestStates = states
 	latestStatesMu.Unlock()
 
 	broker.Publish(pubsub.UpdatedEvent, Event{States: states})
-	return skills, states
 }
 
 // ToPromptXML generates XML for injection into the system prompt.
