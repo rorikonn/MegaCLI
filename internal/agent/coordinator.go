@@ -418,8 +418,6 @@ func getProviderOptions(model Model, providerCfg config.ProviderConfig) fantasy.
 			mergedOptions["effort"] = model.ModelCfg.ReasoningEffort
 		case !hasThink && model.ModelCfg.ReasoningEffort == "on":
 			mergedOptions["thinking"] = map[string]any{"budget_tokens": 2000}
-		case !hasThink && model.ModelCfg.Think && model.ModelCfg.ReasoningEffort == "":
-			mergedOptions["thinking"] = map[string]any{"budget_tokens": 2000}
 		}
 		parsed, err := anthropic.ParseOptions(mergedOptions)
 		if err == nil {
@@ -739,6 +737,10 @@ func (c *coordinator) buildAgentModels(ctx context.Context, isSubAgent bool) (Mo
 	if !ok {
 		return Model{}, Model{}, errSmallModelNotSelected
 	}
+
+	// Small model thinking is always disabled.
+	smallModelCfg.Think = false
+	smallModelCfg.ReasoningEffort = ""
 
 	largeProviderCfg, ok := c.cfg.Config().Providers.Get(largeModelCfg.Provider)
 	if !ok {

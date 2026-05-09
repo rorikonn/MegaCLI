@@ -538,7 +538,6 @@ func (c *Config) defaultModelSelection(knownProviders []catwalk.Provider) (large
 			Model:           defaultLargeModel.ID,
 			MaxTokens:       defaultLargeModel.DefaultMaxTokens,
 			ReasoningEffort: defaultLargeModel.DefaultReasoningEffort,
-			Think:           defaultLargeModel.DefaultReasoningEffort != "",
 		}
 
 		defaultSmallModel := c.GetModel(string(p.ID), p.DefaultSmallModelID)
@@ -547,11 +546,9 @@ func (c *Config) defaultModelSelection(knownProviders []catwalk.Provider) (large
 			return largeModel, smallModel, err
 		}
 		smallModel = SelectedModel{
-			Provider:        string(p.ID),
-			Model:           defaultSmallModel.ID,
-			MaxTokens:       defaultSmallModel.DefaultMaxTokens,
-			ReasoningEffort: defaultSmallModel.DefaultReasoningEffort,
-			Think:           defaultSmallModel.DefaultReasoningEffort != "",
+			Provider:  string(p.ID),
+			Model:     defaultSmallModel.ID,
+			MaxTokens: defaultSmallModel.DefaultMaxTokens,
 		}
 		return largeModel, smallModel, err
 	}
@@ -577,7 +574,11 @@ func (c *Config) defaultModelSelection(knownProviders []catwalk.Provider) (large
 					MaxTokens:       m.DefaultMaxTokens,
 					ReasoningEffort: m.DefaultReasoningEffort,
 				}
-				smallModel = largeModel
+				smallModel = SelectedModel{
+					Provider:  pc.ID,
+					Model:     m.ID,
+					MaxTokens: m.DefaultMaxTokens,
+				}
 				return largeModel, smallModel, nil
 			}
 		}
@@ -636,7 +637,6 @@ func configureSelectedModels(store *ConfigStore, knownProviders []catwalk.Provid
 			if largeModelSelected.ReasoningEffort != "" {
 				large.ReasoningEffort = largeModelSelected.ReasoningEffort
 			}
-			large.Think = largeModelSelected.Think
 			if largeModelSelected.Temperature != nil {
 				large.Temperature = largeModelSelected.Temperature
 			}
@@ -677,9 +677,6 @@ func configureSelectedModels(store *ConfigStore, knownProviders []catwalk.Provid
 			} else {
 				small.MaxTokens = model.DefaultMaxTokens
 			}
-			if smallModelSelected.ReasoningEffort != "" {
-				small.ReasoningEffort = smallModelSelected.ReasoningEffort
-			}
 			if smallModelSelected.Temperature != nil {
 				small.Temperature = smallModelSelected.Temperature
 			}
@@ -695,9 +692,11 @@ func configureSelectedModels(store *ConfigStore, knownProviders []catwalk.Provid
 			if smallModelSelected.PresencePenalty != nil {
 				small.PresencePenalty = smallModelSelected.PresencePenalty
 			}
-			small.Think = smallModelSelected.Think
 		}
 	}
+	// Derive Think from ReasoningEffort for large model.
+	large.Think = large.ReasoningEffort != "" && large.ReasoningEffort != "none"
+
 	c.Models[SelectedModelTypeLarge] = large
 	c.Models[SelectedModelTypeSmall] = small
 	return nil

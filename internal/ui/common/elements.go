@@ -109,7 +109,8 @@ func ModelInfo(t *styles.Styles, modelName, smallModelName, providerName string,
 	}
 
 	if smallModelName != "" {
-		parts = append(parts, t.ModelInfo.Reasoning.Render(smallModelName))
+		smallLine := fmt.Sprintf("%s %s", styles.ModelIcon, smallModelName)
+		parts = append(parts, t.ModelInfo.Reasoning.Render(smallLine))
 	}
 
 	if context != nil {

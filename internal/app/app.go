@@ -574,10 +574,9 @@ func (app *App) GetDefaultSmallModel(providerID string) config.SelectedModel {
 
 	slog.Info("Using provider default small model", "provider", providerID, "model", defaultSmallModelID)
 	return config.SelectedModel{
-		Provider:        providerID,
-		Model:           defaultSmallModelID,
-		MaxTokens:       model.DefaultMaxTokens,
-		ReasoningEffort: model.DefaultReasoningEffort,
+		Provider:  providerID,
+		Model:     defaultSmallModelID,
+		MaxTokens: model.DefaultMaxTokens,
 	}
 }
 

@@ -1647,27 +1647,16 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 			break
 		}
 
-		agentCfg, ok := cfg.Agents[config.AgentCoder]
+		currentModel, ok := cfg.Models[config.SelectedModelTypeLarge]
 		if !ok {
-			cmds = append(cmds, util.ReportError(errors.New("agent configuration not found")))
+			cmds = append(cmds, util.ReportError(errors.New("large model not configured")))
 			break
 		}
 
-		currentModel := cfg.Models[agentCfg.Model]
 		currentModel.ReasoningEffort = msg.Effort
+		currentModel.Think = msg.Effort != "" && msg.Effort != "none"
 
-		// Sync Think field for providers that use a thinking toggle.
-		providerCfg := cfg.GetProviderForModel(agentCfg.Model)
-		if providerCfg != nil {
-			switch providerCfg.Type {
-			case "anthropic", "bedrock", "google-vertex":
-				currentModel.Think = msg.Effort != "" && msg.Effort != "none"
-			case "openai-compat":
-				currentModel.Think = msg.Effort != "" && msg.Effort != "none"
-			}
-		}
-
-		if err := m.com.Workspace.UpdatePreferredModel(config.ScopeGlobal, agentCfg.Model, currentModel); err != nil {
+		if err := m.com.Workspace.UpdatePreferredModel(config.ScopeGlobal, config.SelectedModelTypeLarge, currentModel); err != nil {
 			cmds = append(cmds, util.ReportError(err))
 			break
 		}
@@ -1863,6 +1852,19 @@ func (m *UI) handleSelectModel(msg dialog.ActionSelectModel) tea.Cmd {
 			cmds = append(cmds, cmd)
 		}
 		return tea.Batch(cmds...)
+	}
+
+	switch msg.ModelType {
+	case config.SelectedModelTypeLarge:
+		// Reset thinking to the model's default when switching large model.
+		catwalkModel := cfg.GetModel(msg.Model.Provider, msg.Model.Model)
+		if catwalkModel != nil {
+			msg.Model.ReasoningEffort = catwalkModel.DefaultReasoningEffort
+		}
+		msg.Model.Think = msg.Model.ReasoningEffort != "" && msg.Model.ReasoningEffort != "none"
+	case config.SelectedModelTypeSmall:
+		msg.Model.Think = false
+		msg.Model.ReasoningEffort = ""
 	}
 
 	if err := m.com.Workspace.UpdatePreferredModel(config.ScopeGlobal, msg.ModelType, msg.Model); err != nil {
@@ -3352,23 +3354,14 @@ func (m *UI) handleSlashAction(action any) tea.Cmd {
 		if cfg == nil {
 			return nil
 		}
-		agentCfg, ok := cfg.Agents[config.AgentCoder]
+		currentModel, ok := cfg.Models[config.SelectedModelTypeLarge]
 		if !ok {
 			return nil
 		}
-		currentModel := cfg.Models[agentCfg.Model]
 		currentModel.ReasoningEffort = action.Effort
-		providerCfg := cfg.GetProviderForModel(agentCfg.Model)
-		if providerCfg != nil {
-			switch providerCfg.Type {
-			case "anthropic", "bedrock", "google-vertex":
-				currentModel.Think = action.Effort != "" && action.Effort != "none"
-			case "openai-compat":
-				currentModel.Think = action.Effort != "" && action.Effort != "none"
-			}
-		}
+		currentModel.Think = action.Effort != "" && action.Effort != "none"
 		effort := action.Effort
-		if err := m.com.Workspace.UpdatePreferredModel(config.ScopeGlobal, agentCfg.Model, currentModel); err != nil {
+		if err := m.com.Workspace.UpdatePreferredModel(config.ScopeGlobal, config.SelectedModelTypeLarge, currentModel); err != nil {
 			return util.ReportError(err)
 		}
 		return func() tea.Msg {
