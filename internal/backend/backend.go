@@ -95,7 +95,11 @@ func (b *Backend) CreateWorkspace(args proto.Workspace) (*Workspace, proto.Works
 		return nil, proto.Workspace{}, fmt.Errorf("failed to initialize config: %w", err)
 	}
 
-	cfg.Overrides().SkipPermissionRequests = args.YOLO
+	if args.YOLO {
+		cfg.Overrides().SkipPermissionRequests = true
+	} else if cfg.Config().Permissions != nil && cfg.Config().Permissions.Yolo {
+		cfg.Overrides().SkipPermissionRequests = true
+	}
 
 	if err := createDotCrushDir(cfg.Config().Options.DataDirectory); err != nil {
 		return nil, proto.Workspace{}, fmt.Errorf("failed to create data directory: %w", err)

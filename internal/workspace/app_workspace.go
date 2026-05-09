@@ -323,6 +323,11 @@ func (w *AppWorkspace) SetCompactMode(scope config.Scope, enabled bool) error {
 	return w.store.SetCompactMode(scope, enabled)
 }
 
+func (w *AppWorkspace) SetYoloMode(scope config.Scope, enabled bool) error {
+	w.app.Permissions.SetSkipRequests(enabled)
+	return w.store.SetYoloMode(scope, enabled)
+}
+
 func (w *AppWorkspace) SetProviderAPIKey(scope config.Scope, providerID string, apiKey any) error {
 	return w.store.SetProviderAPIKey(scope, providerID, apiKey)
 }

@@ -463,6 +463,15 @@ func (w *ClientWorkspace) SetCompactMode(scope config.Scope, enabled bool) error
 	return err
 }
 
+func (w *ClientWorkspace) SetYoloMode(scope config.Scope, enabled bool) error {
+	err := w.client.SetConfigField(context.Background(), w.workspaceID(), scope, "permissions.yolo", enabled)
+	if err == nil {
+		w.PermissionSetSkipRequests(enabled)
+		w.refreshWorkspace()
+	}
+	return err
+}
+
 func (w *ClientWorkspace) SetProviderAPIKey(scope config.Scope, providerID string, apiKey any) error {
 	err := w.client.SetProviderAPIKey(context.Background(), w.workspaceID(), scope, providerID, apiKey)
 	if err == nil {

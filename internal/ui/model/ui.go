@@ -1532,6 +1532,7 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 	case dialog.ActionToggleYoloMode:
 		yolo := !m.com.Workspace.PermissionSkipRequests()
 		m.com.Workspace.PermissionSetSkipRequests(yolo)
+		_ = m.com.Workspace.SetYoloMode(config.ScopeGlobal, yolo)
 		m.setEditorPrompt(yolo)
 		m.dialog.CloseDialog(dialog.CommandsID)
 	case dialog.ActionToggleNotifications:
@@ -3381,6 +3382,7 @@ func (m *UI) handleSlashAction(action any) tea.Cmd {
 	case dialog.ActionToggleYoloMode:
 		yolo := !m.com.Workspace.PermissionSkipRequests()
 		m.com.Workspace.PermissionSetSkipRequests(yolo)
+		_ = m.com.Workspace.SetYoloMode(config.ScopeGlobal, yolo)
 		m.setEditorPrompt(yolo)
 		return nil
 	case dialog.ActionToggleHelp:

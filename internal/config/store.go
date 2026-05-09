@@ -215,6 +215,16 @@ func (s *ConfigStore) SetCompactMode(scope Scope, enabled bool) error {
 	return s.SetConfigField(scope, "options.tui.compact_mode", enabled)
 }
 
+// SetYoloMode sets the yolo (skip all permission requests) setting and
+// persists it.
+func (s *ConfigStore) SetYoloMode(scope Scope, enabled bool) error {
+	if s.config.Permissions == nil {
+		s.config.Permissions = &Permissions{}
+	}
+	s.config.Permissions.Yolo = enabled
+	return s.SetConfigField(scope, "permissions.yolo", enabled)
+}
+
 // SetTransparentBackground sets the transparent background setting and persists it.
 func (s *ConfigStore) SetTransparentBackground(scope Scope, enabled bool) error {
 	if s.config.Options == nil {

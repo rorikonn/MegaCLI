@@ -228,6 +228,7 @@ func (c Completions) Limits() (depth, items int) {
 
 type Permissions struct {
 	AllowedTools []string `json:"allowed_tools,omitempty" jsonschema:"description=List of tools that don't require permission prompts,example=bash,example=view"`
+	Yolo         bool     `json:"yolo,omitempty" jsonschema:"description=Automatically accept all permission requests (dangerous),default=false"`
 }
 
 type TrailerStyle string
