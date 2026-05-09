@@ -385,6 +385,22 @@ func (c *Config) configureProviders(store *ConfigStore, env env.Env, resolver Va
 			providerConfig.ExtraHeaders[k] = resolved
 		}
 
+		// Deduplicate models that may result from merging multiple
+		// config files (jsons.Merge appends arrays).
+		seen := make(map[string]bool, len(providerConfig.Models))
+		uniqueModels := make([]catwalk.Model, 0, len(providerConfig.Models))
+		for _, model := range providerConfig.Models {
+			if seen[model.ID] {
+				continue
+			}
+			seen[model.ID] = true
+			if model.Name == "" {
+				model.Name = model.ID
+			}
+			uniqueModels = append(uniqueModels, model)
+		}
+		providerConfig.Models = uniqueModels
+
 		c.Providers.Set(id, providerConfig)
 	}
 
