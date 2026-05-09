@@ -339,11 +339,8 @@ func setupLocalWorkspace(cmd *cobra.Command) (workspace.Workspace, func(), error
 		return nil, nil, fmt.Errorf("failed to create data directory: %q %w", cfg.Options.DataDirectory, err)
 	}
 
-	gitIgnorePath := filepath.Join(cfg.Options.DataDirectory, ".gitignore")
-	if _, err := os.Stat(gitIgnorePath); os.IsNotExist(err) {
-		if err := os.WriteFile(gitIgnorePath, []byte("*\n"), 0o644); err != nil {
-			return nil, nil, fmt.Errorf("failed to create .gitignore file: %q %w", gitIgnorePath, err)
-		}
+	if err := ensureDataDirGitignore(cfg.Options.DataDirectory); err != nil {
+		return nil, nil, err
 	}
 
 	if err := projects.Register(cwd, cfg.Options.DataDirectory); err != nil {
@@ -675,21 +672,30 @@ func createDotCrushDir(dir string) error {
 		return fmt.Errorf("failed to create data directory: %q %w", dir, err)
 	}
 
-	gitIgnorePath := filepath.Join(dir, ".gitignore")
-	content, err := os.ReadFile(gitIgnorePath)
-
-	// create or update if old version
-	if os.IsNotExist(err) || string(content) == oldGitIgnore {
-		if err := os.WriteFile(gitIgnorePath, []byte(defaultGitIgnore), 0o644); err != nil {
-			return fmt.Errorf("failed to create .gitignore file: %q %w", gitIgnorePath, err)
-		}
-	}
-
-	return nil
+	return ensureDataDirGitignore(dir)
 }
-
-//go:embed gitignore/old
-var oldGitIgnore string
 
 //go:embed gitignore/default
 var defaultGitIgnore string
+
+// ensureDataDirGitignore creates or migrates the .gitignore inside the data
+// directory so that only runtime artifacts are ignored and user-authored
+// content (megacli.json, commands/, skills/, agents/) is tracked by git.
+func ensureDataDirGitignore(dir string) error {
+	gitIgnorePath := filepath.Join(dir, ".gitignore")
+	content, err := os.ReadFile(gitIgnorePath)
+
+	switch {
+	case os.IsNotExist(err):
+		// First run — create the gitignore.
+	case err != nil:
+		return fmt.Errorf("failed to read .gitignore file: %q %w", gitIgnorePath, err)
+	case string(content) == defaultGitIgnore:
+		return nil
+	}
+
+	if err := os.WriteFile(gitIgnorePath, []byte(defaultGitIgnore), 0o644); err != nil {
+		return fmt.Errorf("failed to write .gitignore file: %q %w", gitIgnorePath, err)
+	}
+	return nil
+}

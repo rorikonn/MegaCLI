@@ -269,7 +269,7 @@ func getGitStatus(ctx context.Context, dir string) (string, error) {
 }
 
 func getGitBranch(ctx context.Context, sh *shell.Shell) (string, error) {
-	out, _, err := sh.Exec(ctx, "git branch --show-current 2>/dev/null")
+	out, _, err := sh.Exec(ctx, "git branch --show-current")
 	if err != nil {
 		return "", nil
 	}
@@ -281,7 +281,7 @@ func getGitBranch(ctx context.Context, sh *shell.Shell) (string, error) {
 }
 
 func getGitStatusSummary(ctx context.Context, sh *shell.Shell) (string, error) {
-	out, _, err := sh.Exec(ctx, "git status --short 2>/dev/null | head -20")
+	out, _, err := sh.Exec(ctx, "git status --short | head -20")
 	if err != nil {
 		return "", nil
 	}
@@ -293,7 +293,7 @@ func getGitStatusSummary(ctx context.Context, sh *shell.Shell) (string, error) {
 }
 
 func getGitRecentCommits(ctx context.Context, sh *shell.Shell) (string, error) {
-	out, _, err := sh.Exec(ctx, "git log --oneline -n 3 2>/dev/null")
+	out, _, err := sh.Exec(ctx, "git log --oneline -n 3")
 	if err != nil || out == "" {
 		return "", nil
 	}
