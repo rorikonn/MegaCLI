@@ -4,7 +4,7 @@
 > This document was designed for both humans and agents.
 
 Hooks are user-defined shell scripts that run when various events happen during
-the agent lifecycle, allowing you to both build on top of Crush, customize
+the agent lifecycle, allowing you to both build on top of MegaCLI, customize
 its behavior, and exert deterministic control over an agent's wily behavior.
 
 Hooks are just shell commands, and were designed to be both simple and future
@@ -15,9 +15,9 @@ forward.
 - Hooks just shell commands
 - Hooks can be written in any language because they’re just executables: Bash, Python, Node, Rust, Haskell, whatever
 - Hooks are Claude Code-compatible
-- Crush ships with a builtin `crush-hook` skill write, edit, and configure
-  hooks; just tell Crush how to configure Crush
-- Crush currently supports just one hook, `PreToolUse`, with plans to support
+- MegaCLI ships with a builtin `megacli-hooks` skill to write, edit, and configure
+  hooks; just tell MegaCLI how to configure MegaCLI
+- MegaCLI currently supports just one hook, `PreToolUse`, with plans to support
   the full gamut; please let us know which hooks you'd like to see next
 - Hooks run in parallel for speed, but their results compose in config order
   for determinism
@@ -44,7 +44,7 @@ disallow the use of Haskell (but we love you, Simon Peyton Jones).
 ### Config
 
 The first thing we need to do is hook up our hook. Let's add the following to
-our local `crush.json`. You can, of course, do this globally, too.
+our local `megacli.json`. You can, of course, do this globally, too.
 
 ```jsonc
 {
@@ -71,8 +71,8 @@ Now, let's make our `no-haskell.sh` hook script.
 #!/usr/bin/env bash
 
 # Disallow ghc, cabal, and stack. Pipe the bash command output
-# ($CRUSH_TOOL_INPUT_COMMAND) to grep and match on a regexp.
-if echo "$CRUSH_TOOL_INPUT_COMMAND" | grep -qE '(^| )((ghc|cabal|stack)(\.exe)?)( |$)'; then
+# ($MEGACLI_TOOL_INPUT_COMMAND) to grep and match on a regexp.
+if echo "$MEGACLI_TOOL_INPUT_COMMAND" | grep -qE '(^| )((ghc|cabal|stack)(\.exe)?)( |$)'; then
 
   # Someone is trying to use Haskell. Let's send a message back to the model
   # and user explaining why we're blocking this. Note that we send all feedback
@@ -90,7 +90,7 @@ That's basically it. For the full guide on how hooks work, however, read on.
 
 ## Configuration
 
-Hooks can be added to your `crush.json` (or `.crush.json`) at both the global
+Hooks can be added to your `megacli.json` (or `.megacli.json`) at both the global
 and project-level, with project level hooks taking precedence.
 
 ```jsonc
@@ -138,7 +138,7 @@ Hooks are keyed by event name. Only `command` is required, and you can omit
 
 ## Building Hooks
 
-When a hook fires, Crush:
+When a hook fires, MegaCLI:
 
 1. Filters hooks whose `matcher` regex matches the tool name (no matcher = match
    all).
@@ -149,12 +149,12 @@ When a hook fires, Crush:
    shallow-merge in order.
 5. Applies the result **before** permission checks. If the aggregated decision
    is `deny`, the tool call is blocked and you never see a permission prompt
-   for it. If it's `allow`, Crush treats that as affirmative pre-approval and
+   for it. If it's `allow`, MegaCLI treats that as affirmative pre-approval and
    also skips the prompt. Silence (no decision) falls through to the normal
    permission flow.
 
 Note that you can omit `matcher` and match in your shell script instead, however
-you'll incur some additional overhead as Crush will `exec` each script.
+you'll incur some additional overhead as MegaCLI will `exec` each script.
 
 ### Input
 
@@ -168,13 +168,13 @@ The available environment variables are:
 
 | Variable                     | Description                                    |
 | ---------------------------- | ---------------------------------------------- |
-| `CRUSH_EVENT`                | The hook event name (e.g. `PreToolUse`).       |
-| `CRUSH_TOOL_NAME`            | The tool being called (e.g. `bash`).           |
-| `CRUSH_SESSION_ID`           | Current session ID.                            |
-| `CRUSH_CWD`                  | Working directory.                             |
-| `CRUSH_PROJECT_DIR`          | Project root directory.                        |
-| `CRUSH_TOOL_INPUT_COMMAND`   | For `bash` calls: the shell command being run. |
-| `CRUSH_TOOL_INPUT_FILE_PATH` | For file tools: the target file path.          |
+| `MEGACLI_EVENT`                | The hook event name (e.g. `PreToolUse`).       |
+| `MEGACLI_TOOL_NAME`            | The tool being called (e.g. `bash`).           |
+| `MEGACLI_SESSION_ID`           | Current session ID.                            |
+| `MEGACLI_CWD`                  | Working directory.                             |
+| `MEGACLI_PROJECT_DIR`          | Project root directory.                        |
+| `MEGACLI_TOOL_INPUT_COMMAND`   | For `bash` calls: the shell command being run. |
+| `MEGACLI_TOOL_INPUT_FILE_PATH` | For file tools: the target file path.          |
 
 #### JSON
 
@@ -215,7 +215,7 @@ command = data.get("tool_input", {}).get("command", "")
 
 ### Output
 
-Hooks communicate back to Crush via **exit code** and `stdout`/`stderr`. The
+Hooks communicate back to MegaCLI via **exit code** and `stdout`/`stderr`. The
 simplest way to do this is to return an error code and print additional context
 to stderr. For example:
 
@@ -309,7 +309,7 @@ EOF
 
 Hooks run in parallel, but their results compose in config order. Whichever hook
 finishes first doesn't get to "win" by virtue of timing; composition is
-deterministic based on the order hooks appear in `crush.json`.
+deterministic based on the order hooks appear in `megacli.json`.
 
 When multiple hooks match the same tool call:
 
@@ -356,7 +356,7 @@ Prevent the agent from running `rm -rf` in bash:
 # Block rm -rf commands in the bash tool. Otherwise stay silent so the
 # normal permission flow runs.
 
-if echo "$CRUSH_TOOL_INPUT_COMMAND" | grep -qE 'rm\s+-(rf|fr)\s+/'; then
+if echo "$MEGACLI_TOOL_INPUT_COMMAND" | grep -qE 'rm\s+-(rf|fr)\s+/'; then
   echo "Refusing to run rm -rf against root" >&2
   exit 2
 fi
@@ -367,7 +367,7 @@ exit 0
 ### Auto-approve read-only tools
 
 Skip the permission prompt for tools that can't change anything. The hook
-returns `decision: "allow"`, which tells Crush to pre-approve the call:
+returns `decision: "allow"`, which tells MegaCLI to pre-approve the call:
 
 ```jsonc
 {
@@ -390,7 +390,7 @@ risk; consider a more targeted allowlist instead:
 #!/usr/bin/env bash
 # hooks/safe-bash.sh — auto-approve read-only bash commands.
 
-case "$CRUSH_TOOL_INPUT_COMMAND" in
+case "$MEGACLI_TOOL_INPUT_COMMAND" in
   ls*|cat*|grep*|rg*|echo*|pwd*)
     echo '{"decision":"allow"}'
     ;;
@@ -426,7 +426,7 @@ Add a reminder to the model whenever it writes a Go file:
 # Emit context only; stay silent on `decision` so the normal permission
 # prompt still runs for edits/writes.
 
-if [[ "$CRUSH_TOOL_INPUT_FILE_PATH" == *.go ]]; then
+if [[ "$MEGACLI_TOOL_INPUT_FILE_PATH" == *.go ]]; then
   echo '{"context": "Remember: run gofumpt after editing Go files."}'
 else
   echo '{}'
@@ -448,7 +448,7 @@ With no `matcher` this fires for every tool. It exits 0 with no stdout so the
 tool call always proceeds.
 
 ```jsonc
-{ "command": "echo \"$(date -Iseconds) $CRUSH_TOOL_NAME\" >> ./tools.log" }
+{ "command": "echo \"$(date -Iseconds) $MEGACLI_TOOL_NAME\" >> ./tools.log" }
 ```
 
 ### A real-world Example:
@@ -497,13 +497,13 @@ process.stdin.on("end", () => {
 
 ## Claude Code compatibility
 
-Crush hooks are broadly compatible with [Claude Code
+MegaCLI hooks are broadly compatible with [Claude Code
 hooks](https://docs.claude.com/en/docs/claude-code/hooks): the config shape,
 stdin payload, output envelope, and exit codes line up so most Claude Code
-hooks run under Crush unchanged. This document covers the Crush-specific API
+hooks run under MegaCLI unchanged. This document covers the MegaCLI-specific API
 only — anything not documented here isn't guaranteed to work.
 
-One intentional divergence: Crush treats `updated_input` as a shallow-merge
+One intentional divergence: MegaCLI treats `updated_input` as a shallow-merge
 patch against the original `tool_input` rather than a full replacement. Keys
 you omit are preserved. See [Output](#output) for details.
 
@@ -645,7 +645,7 @@ PreToolUse-specific rules:
 
 4. `decision` precedence: `deny` > `allow` > `null`. First deny determines the
    outcome; subsequent allows don't override. If the final aggregated decision
-   is `allow`, Crush pre-approves the tool call and skips the permission
+   is `allow`, MegaCLI pre-approves the tool call and skips the permission
    prompt. If it's `null` (no hook allowed), the tool goes through the normal
    permission flow.
 5. `updated_input` patches shallow-merge sequentially against the original

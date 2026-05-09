@@ -1,21 +1,21 @@
 ---
-name: crush-config
-description: Use when the user needs help configuring Crush — working with crush.json, setting up providers, configuring LSPs, adding MCP servers, managing skills or permissions, or changing Crush behavior.
+name: megacli-config
+description: Use when the user needs help configuring MegaCLI — working with megacli.json, setting up providers, configuring LSPs, adding MCP servers, managing skills or permissions, or changing MegaCLI behavior.
 ---
 
-# Crush Configuration
+# MegaCLI Configuration
 
-Crush uses JSON configuration files with the following priority (highest to lowest):
+MegaCLI uses JSON configuration files with the following priority (highest to lowest):
 
-1. `.crush.json` (project-local, hidden)
-2. `crush.json` (project-local)
-3. `$XDG_CONFIG_HOME/crush/crush.json` or `$HOME/.config/crush/crush.json` (global)
+1. `.megacli.json` (project-local, hidden)
+2. `megacli.json` (project-local)
+3. `$XDG_CONFIG_HOME/megacli/megacli.json` or `$HOME/.config/megacli/megacli.json` (global)
 
 ## Basic Structure
 
 ```json
 {
-  "$schema": "https://charm.land/crush.json",
+  "$schema": "https://megacli.dev/megacli.json",
   "models": {},
   "providers": {},
   "mcp": {},
@@ -133,7 +133,7 @@ The `$schema` property enables IDE autocomplete but is optional.
   "options": {
     "skills_paths": ["./skills"],
     "disabled_tools": ["bash", "sourcegraph"],
-    "disabled_skills": ["crush-config"],
+    "disabled_skills": ["megacli-config"],
     "tui": {
       "compact_mode": false,
       "diff_mode": "unified",
@@ -152,7 +152,7 @@ The `$schema` property enables IDE autocomplete but is optional.
 
 > [!IMPORTANT]
 > The following skill paths are loaded by default and DO NOT NEED to be added to `skills_paths`:
-> `.agents/skills`, `.crush/skills`, `.claude/skills`, `.cursor/skills`
+> `.agents/skills`, `.megacli/skills`, `.claude/skills`, `.cursor/skills`
 
 Other options: `context_paths`, `progress`, `disable_notifications`, `disable_auto_summarize`, `disable_metrics`, `disable_provider_auto_update`, `disable_default_providers`, `data_directory`, `initialize_as`.
 
@@ -166,11 +166,11 @@ Hooks are user-defined shell commands that fire on agent events. Currently only 
     "PreToolUse": [
       {
         "matcher": "^(edit|write|multiedit)$",
-        "command": ".crush/hooks/protect-files.sh"
+        "command": ".megacli/hooks/protect-files.sh"
       },
       {
         "matcher": "^bash$",
-        "command": ".crush/hooks/no-haskell.sh"
+        "command": ".megacli/hooks/no-haskell.sh"
       }
     ]
   }
@@ -211,13 +211,13 @@ A JSON payload is piped to the hook command:
 
 | Variable | Description |
 |---|---|
-| `CRUSH_EVENT` | Event name (e.g. `PreToolUse`) |
-| `CRUSH_TOOL_NAME` | Name of the tool being called |
-| `CRUSH_SESSION_ID` | Current session ID |
-| `CRUSH_CWD` | Current working directory |
-| `CRUSH_PROJECT_DIR` | Project root directory |
-| `CRUSH_TOOL_INPUT_COMMAND` | Value of `command` from tool input (if present) |
-| `CRUSH_TOOL_INPUT_FILE_PATH` | Value of `file_path` from tool input (if present) |
+| `MEGACLI_EVENT` | Event name (e.g. `PreToolUse`) |
+| `MEGACLI_TOOL_NAME` | Name of the tool being called |
+| `MEGACLI_SESSION_ID` | Current session ID |
+| `MEGACLI_CWD` | Current working directory |
+| `MEGACLI_PROJECT_DIR` | Project root directory |
+| `MEGACLI_TOOL_INPUT_COMMAND` | Value of `command` from tool input (if present) |
+| `MEGACLI_TOOL_INPUT_FILE_PATH` | Value of `file_path` from tool input (if present) |
 
 ### Hook Output
 
@@ -243,7 +243,7 @@ exit 2
 
 ### Claude Code Compatibility
 
-Crush also supports the Claude Code hook output format:
+MegaCLI also supports the Claude Code hook output format:
 
 ```json
 {
@@ -279,6 +279,6 @@ When multiple hooks match, their decisions are aggregated:
 
 ## Environment Variables
 
-- `CRUSH_GLOBAL_CONFIG` - Override global config location
-- `CRUSH_GLOBAL_DATA` - Override data directory location
-- `CRUSH_SKILLS_DIR` - Override default skills directory
+- `MEGACLI_GLOBAL_CONFIG` - Override global config location
+- `MEGACLI_GLOBAL_DATA` - Override data directory location
+- `MEGACLI_SKILLS_DIR` - Override default skills directory

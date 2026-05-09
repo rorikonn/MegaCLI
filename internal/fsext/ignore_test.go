@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCrushIgnore(t *testing.T) {
+func TestMegacliIgnore(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Chdir(tempDir)
 
@@ -51,8 +51,8 @@ func TestShouldExcludeFile(t *testing.T) {
 	}
 
 	// Create .megacliignore file
-	crushignoreContent := "custom_ignored/\n"
-	if err := os.WriteFile(filepath.Join(tempDir, ".megacliignore"), []byte(crushignoreContent), 0o644); err != nil {
+	megacliIgnoreContent := "custom_ignored/\n"
+	if err := os.WriteFile(filepath.Join(tempDir, ".megacliignore"), []byte(megacliIgnoreContent), 0o644); err != nil {
 		t.Fatalf("Failed to create .megacliignore: %v", err)
 	}
 
@@ -85,8 +85,8 @@ func TestShouldExcludeFileHierarchical(t *testing.T) {
 	}
 
 	// Create .megacliignore in subdir that ignores normal_nested
-	subCrushignore := "normal_nested/\n"
-	if err := os.WriteFile(filepath.Join(subDir, ".megacliignore"), []byte(subCrushignore), 0o644); err != nil {
+	subMegacliIgnore := "normal_nested/\n"
+	if err := os.WriteFile(filepath.Join(subDir, ".megacliignore"), []byte(subMegacliIgnore), 0o644); err != nil {
 		t.Fatalf("Failed to create subdir .megacliignore: %v", err)
 	}
 

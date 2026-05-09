@@ -28,7 +28,7 @@ Ask the user the following questions (skip any they already answered):
 
 ## Step 2: Generate Configuration
 
-Produce a JSON snippet for `crush.json` under the `agents` key:
+Produce a JSON snippet for `megacli.json` under the `agents` key:
 
 ```json
 {
@@ -38,7 +38,7 @@ Produce a JSON snippet for `crush.json` under the `agents` key:
       "description": "<description>",
       "role": "<primary|subagent>",
       "model": "<large|small>",
-      "prompt_file": ".crush/prompts/<id>.md.tpl",
+      "prompt_file": ".megacli/prompts/<id>.md.tpl",
       "allowed_tools": ["<tool1>", "<tool2>"]
     }
   }
@@ -52,7 +52,7 @@ Rules:
 
 ## Step 3: Create Prompt Template (if requested)
 
-If the user wants a custom prompt, create `.crush/prompts/<id>.md.tpl`.
+If the user wants a custom prompt, create `.megacli/prompts/<id>.md.tpl`.
 
 The template uses Go `text/template` syntax. Available variables:
 
@@ -88,7 +88,7 @@ analyze, and report."
 
 ## Step 4: Apply Configuration
 
-1. Read the existing `crush.json` (or `.crush.json`) file.
+1. Read the existing `megacli.json` (or `.megacli.json`) file.
 2. Merge the new agent config into the `agents` block.
 3. Write the updated config file.
 4. If a prompt template was created, confirm the file path.

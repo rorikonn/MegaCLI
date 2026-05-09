@@ -131,7 +131,7 @@ func TestRegisterWithParentDataDir(t *testing.T) {
 	t.Setenv("MEGACLI_GLOBAL_DATA", filepath.Join(tmpDir, "megacli"))
 
 	// Register a project where .megacli is in a parent directory.
-	// e.g., working in /home/user/monorepo/packages/app but .megacli is at /home/user/monorepo/.crush
+	// e.g., working in /home/user/monorepo/packages/app but .megacli is at /home/user/monorepo/.megacli
 	err := Register("/home/user/monorepo/packages/app", "/home/user/monorepo/.megacli")
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)

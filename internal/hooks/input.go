@@ -73,7 +73,7 @@ func BuildEnv(eventName, toolName, sessionID, cwd, projectDir, toolInputJSON str
 }
 
 // parseStdout parses the JSON output from a hook command's stdout.
-// Supports both Crush format and Claude Code format (hookSpecificOutput).
+// Supports both MegaCLI format and Claude Code format (hookSpecificOutput).
 func parseStdout(stdout string) HookResult {
 	stdout = strings.TrimSpace(stdout)
 	if stdout == "" {

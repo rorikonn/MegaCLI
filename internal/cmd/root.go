@@ -97,7 +97,7 @@ megacli --debug --cwd /path/to/project
 megacli --yolo
 
 # Run with custom data directory
-megacli --data-dir /path/to/custom/.crush
+megacli --data-dir /path/to/custom/.megacli
 
 # Continue a previous session
 megacli --session {session-id}

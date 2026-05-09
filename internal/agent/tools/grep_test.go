@@ -80,8 +80,8 @@ func TestGrepWithIgnoreFiles(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(tempDir, ".gitignore"), []byte(gitignoreContent), 0o644))
 
 	// Create .megacliignore file
-	crushignoreContent := "node_modules/\n"
-	require.NoError(t, os.WriteFile(filepath.Join(tempDir, ".megacliignore"), []byte(crushignoreContent), 0o644))
+	megacliIgnoreContent := "node_modules/\n"
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, ".megacliignore"), []byte(megacliIgnoreContent), 0o644))
 
 	// Test both implementations
 	for name, fn := range map[string]func(pattern, path, include string) ([]grepMatch, error){

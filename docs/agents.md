@@ -43,7 +43,7 @@ AvailableAgents() []string
 
 ## Defining Custom Agents
 
-Add agents in `crush.json` under the top-level `agents` key:
+Add agents in `megacli.json` under the top-level `agents` key:
 
 ```json
 {
@@ -53,7 +53,7 @@ Add agents in `crush.json` under the top-level `agents` key:
       "description": "Code review specialist",
       "role": "primary",
       "model": "large",
-      "prompt_file": ".crush/prompts/reviewer.md.tpl",
+      "prompt_file": ".megacli/prompts/reviewer.md.tpl",
       "allowed_tools": ["view", "grep", "glob", "ls"]
     },
     "summarizer": {
@@ -61,7 +61,7 @@ Add agents in `crush.json` under the top-level `agents` key:
       "description": "Lightweight summarization subagent",
       "role": "subagent",
       "model": "small",
-      "prompt_file": ".crush/prompts/summarizer.md.tpl",
+      "prompt_file": ".megacli/prompts/summarizer.md.tpl",
       "allowed_tools": ["view", "grep"]
     }
   }

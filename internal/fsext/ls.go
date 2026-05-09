@@ -138,7 +138,7 @@ func parsePatterns(lines []string, domain []string) []gitignore.Pattern {
 }
 
 type directoryLister struct {
-	// dirPatterns caches parsed patterns from .gitignore/.megacliignore for each directory.
+	// dirPatterns caches parsed patterns from .gitignore and .megacliignore for each directory.
 	// This avoids re-reading files when building combined matchers.
 	dirPatterns *csync.Map[string, []gitignore.Pattern]
 	// combinedMatchers caches a combined matcher for each directory that includes
@@ -164,8 +164,8 @@ func pathToComponents(path string) []string {
 	return strings.Split(path, "/")
 }
 
-// getDirPatterns returns the parsed patterns for a specific directory's
-// .gitignore and .megacliignore files. Results are cached.
+// getDirPatterns returns the parsed patterns for a specific directory's .gitignore
+// and .megacliignore files. Results are cached.
 func (dl *directoryLister) getDirPatterns(dir string) []gitignore.Pattern {
 	return dl.dirPatterns.GetOrSet(dir, func() []gitignore.Pattern {
 		var allPatterns []gitignore.Pattern

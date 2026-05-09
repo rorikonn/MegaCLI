@@ -18,7 +18,7 @@ import (
 )
 
 // DummyHost is used to satisfy the http.Client's requirement for a URL.
-const DummyHost = "api.crush.localhost"
+const DummyHost = "api.megacli.localhost"
 
 // Client represents an RPC client connected to a Crush server.
 type Client struct {

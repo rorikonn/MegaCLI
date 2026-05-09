@@ -28,7 +28,18 @@ func NewShowFileToolMessageItem(
 	result *message.ToolResult,
 	canceled bool,
 ) ToolMessageItem {
-	return newBaseToolMessageItem(sty, toolCall, result, &ShowFileToolRenderContext{}, canceled)
+	base := newBaseToolMessageItem(sty, toolCall, result, &ShowFileToolRenderContext{}, canceled)
+	return &ShowFileToolMessageItem{baseToolMessageItem: base}
+}
+
+// HandleMouseClick only triggers expand/collapse when the user clicks on the
+// tool header line (y == 0), preventing accidental toggles and scroll jumps
+// when clicking inside the file content area.
+func (s *ShowFileToolMessageItem) HandleMouseClick(btn ansi.MouseButton, x, y int) bool {
+	if btn != ansi.MouseLeft {
+		return false
+	}
+	return y == 0
 }
 
 type ShowFileToolRenderContext struct{}
