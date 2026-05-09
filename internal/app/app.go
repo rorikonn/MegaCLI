@@ -670,19 +670,69 @@ func (app *App) Subscribe(program *tea.Program) {
 	defer app.tuiWG.Done()
 
 	events := app.events.Subscribe(tuiCtx)
+	msgs := unboundedEventRelay(tuiCtx, events)
 	for {
 		select {
 		case <-tuiCtx.Done():
 			slog.Debug("TUI message handler shutting down")
 			return
-		case ev, ok := <-events:
+		case msg, ok := <-msgs:
 			if !ok {
 				slog.Debug("TUI message channel closed")
 				return
 			}
-			program.Send(ev.Payload)
+			program.Send(msg)
 		}
 	}
+}
+
+// unboundedEventRelay starts a goroutine that relays messages from the
+// pubsub subscriber channel to an output channel using an internal
+// unbounded buffer. This prevents program.Send() backpressure from filling
+// the subscriber channel, which would cause the broker to silently drop
+// critical events (e.g. ask_user prompts).
+func unboundedEventRelay(ctx context.Context, in <-chan pubsub.Event[tea.Msg]) <-chan tea.Msg {
+	out := make(chan tea.Msg)
+	go func() {
+		defer close(out)
+		var queue []tea.Msg
+		for {
+			if len(queue) == 0 {
+				select {
+				case <-ctx.Done():
+					return
+				case ev, ok := <-in:
+					if !ok {
+						return
+					}
+					queue = append(queue, ev.Payload)
+				}
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case out <- queue[0]:
+				queue[0] = nil
+				queue = queue[1:]
+				if len(queue) == 0 {
+					queue = nil
+				}
+			case ev, ok := <-in:
+				if !ok {
+					for _, msg := range queue {
+						select {
+						case out <- msg:
+						case <-ctx.Done():
+							return
+						}
+					}
+					return
+				}
+				queue = append(queue, ev.Payload)
+			}
+		}
+	}()
+	return out
 }
 
 // Shutdown performs a graceful shutdown of the application.
