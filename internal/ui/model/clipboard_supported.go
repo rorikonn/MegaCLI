@@ -13,3 +13,8 @@ func readClipboard(f clipboardFormat) ([]byte, error) {
 	}
 	return nil, errClipboardUnknownFormat
 }
+
+// readClipboardFileDrop is not supported on this platform.
+func readClipboardFileDrop() []string {
+	return nil
+}

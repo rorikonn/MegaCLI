@@ -4260,20 +4260,25 @@ func (m *UI) handleKeyReleaseMsg(msg tea.KeyReleaseMsg) tea.Cmd {
 	// Skip if a paste was already triggered recently by a KeyPressMsg or
 	// PasteMsg to avoid duplicate attachments.
 	if time.Since(m.lastImagePasteAt) < 500*time.Millisecond {
+		slog.Info("handleKeyReleaseMsg: skipping, recent paste already triggered")
 		return nil
 	}
 
+	slog.Info("handleKeyReleaseMsg: triggering pasteImageFromClipboard via key release")
 	m.lastImagePasteAt = time.Now()
 	return m.pasteImageFromClipboard
 }
 
 // handlePasteMsg handles a paste message.
 func (m *UI) handlePasteMsg(msg tea.PasteMsg) tea.Cmd {
+	slog.Info("handlePasteMsg: received", "content_len", len(msg.Content), "content_preview", truncateForLog(msg.Content, 200))
+
 	if m.dialog.HasDialogs() {
 		return m.handleDialogMsg(msg)
 	}
 
 	if m.focus != uiFocusEditor {
+		slog.Info("handlePasteMsg: focus is not on editor, ignoring")
 		return nil
 	}
 
@@ -4281,7 +4286,13 @@ func (m *UI) handlePasteMsg(msg tea.PasteMsg) tea.Cmd {
 	// the terminal may have intercepted Ctrl+V but found no text on the
 	// clipboard. Try reading image data directly.
 	trimmedContent := strings.TrimSpace(strings.ReplaceAll(msg.Content, "\x00", ""))
-	if trimmedContent == "" && m.currentModelSupportsImages() {
+	if trimmedContent == "" {
+		if !m.currentModelSupportsImages() {
+			return func() tea.Msg {
+				return util.NewInfoMsg("Current model does not support images")
+			}
+		}
+		slog.Info("handlePasteMsg: empty content, trying image paste")
 		m.lastImagePasteAt = time.Now()
 		return m.pasteImageFromClipboard
 	}
@@ -4308,12 +4319,14 @@ func (m *UI) handlePasteMsg(msg tea.PasteMsg) tea.Cmd {
 	// all files exist and are valid, add as attachments.
 	// Otherwise, paste as text.
 	paths := fsext.ParsePastedFiles(msg.Content)
+	slog.Info("handlePasteMsg: parsed paths", "paths", paths)
 	allExistsAndValid := func() bool {
 		if len(paths) == 0 {
 			return false
 		}
 		for _, path := range paths {
 			if _, err := os.Stat(path); os.IsNotExist(err) {
+				slog.Info("handlePasteMsg: path does not exist", "path", path)
 				return false
 			}
 
@@ -4326,16 +4339,19 @@ func (m *UI) handlePasteMsg(msg tea.PasteMsg) tea.Cmd {
 				}
 			}
 			if !isValid {
+				slog.Info("handlePasteMsg: path extension not allowed", "path", path)
 				return false
 			}
 		}
 		return true
 	}
 	if !allExistsAndValid() {
+		slog.Info("handlePasteMsg: pasting as text (not valid image paths)")
 		prevHeight := m.textarea.Height()
 		return m.updateTextareaWithPrevHeight(msg, prevHeight)
 	}
 
+	slog.Info("handlePasteMsg: attaching image files", "paths", paths)
 	var cmds []tea.Cmd
 	for _, path := range paths {
 		cmds = append(cmds, m.handleFilePathPaste(path))
@@ -4429,7 +4445,10 @@ func (m *UI) pasteImageFromClipboard() tea.Msg {
 
 	textData, textErr := readClipboard(clipboardFormatText)
 	if textErr != nil || len(textData) == 0 {
-		return nil // Clipboard is empty or does not contain an image
+		// No text available; try CF_HDROP (file drop) as a last resort.
+		// Some apps (e.g. HoYowave) place an image file path via FileDrop
+		// without setting CF_UNICODETEXT.
+		return m.pasteImageFromFileDrop()
 	}
 
 	path := strings.TrimSpace(string(textData))
@@ -4479,6 +4498,62 @@ func (m *UI) pasteImageFromClipboard() tea.Msg {
 		MimeType: mimeOf(content),
 		Content:  content,
 	}
+}
+
+// pasteImageFromFileDrop attempts to read image file paths from CF_HDROP
+// (FileDrop) clipboard data. Returns an attachment if a valid image is
+// found, nil otherwise.
+func (m *UI) pasteImageFromFileDrop() tea.Msg {
+	paths := readClipboardFileDrop()
+	slog.Info("pasteImageFromFileDrop: read file drop paths", "paths", paths)
+	if len(paths) == 0 {
+		return nil
+	}
+
+	for _, path := range paths {
+		lowerPath := strings.ToLower(path)
+		isAllowed := false
+		for _, ext := range common.AllowedImageTypes {
+			if strings.HasSuffix(lowerPath, ext) {
+				isAllowed = true
+				break
+			}
+		}
+		if !isAllowed {
+			continue
+		}
+
+		info, err := os.Stat(path)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		if info.Size() > common.MaxAttachmentSize {
+			return util.InfoMsg{
+				Type: util.InfoTypeError,
+				Msg:  "File too large, max 5MB",
+			}
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+
+		return message.Attachment{
+			FilePath: path,
+			FileName: filepath.Base(path),
+			MimeType: mimeOf(content),
+			Content:  content,
+		}
+	}
+	return nil
+}
+
+func truncateForLog(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
 
 var pasteRE = regexp.MustCompile(`paste_(\d+).txt`)

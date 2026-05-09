@@ -20,19 +20,23 @@ const (
 	winCfDIB    = 8
 	winCfDIBV5  = 17
 	winCfBitmap = 2
+	winCfHDROP  = 15
 )
 
 var (
 	user32Win   = syscall.NewLazyDLL("user32.dll")
 	kernel32Win = syscall.NewLazyDLL("kernel32.dll")
+	shell32Win  = syscall.NewLazyDLL("shell32.dll")
 
-	winOpenClipboard               = user32Win.NewProc("OpenClipboard")
-	winCloseClipboard              = user32Win.NewProc("CloseClipboard")
-	winGetClipboardData            = user32Win.NewProc("GetClipboardData")
-	winIsClipboardFormatAvailable  = user32Win.NewProc("IsClipboardFormatAvailable")
+	winOpenClipboard              = user32Win.NewProc("OpenClipboard")
+	winCloseClipboard             = user32Win.NewProc("CloseClipboard")
+	winGetClipboardData           = user32Win.NewProc("GetClipboardData")
+	winIsClipboardFormatAvailable = user32Win.NewProc("IsClipboardFormatAvailable")
 
 	winGlobalLock   = kernel32Win.NewProc("GlobalLock")
 	winGlobalUnlock = kernel32Win.NewProc("GlobalUnlock")
+
+	winDragQueryFileW = shell32Win.NewProc("DragQueryFileW")
 )
 
 type winBitmapInfoHeader struct {
@@ -265,4 +269,45 @@ func readDIBAny() ([]byte, error) {
 		return nil, err
 	}
 	return pngBuf.Bytes(), nil
+}
+
+// readClipboardFileDrop reads CF_HDROP (file drop) data from the clipboard
+// and returns the list of file paths. Returns nil if CF_HDROP is not
+// available.
+func readClipboardFileDrop() []string {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	r, _, _ := winIsClipboardFormatAvailable.Call(winCfHDROP)
+	if r == 0 {
+		return nil
+	}
+
+	r, _, _ = winOpenClipboard.Call(0)
+	if r == 0 {
+		return nil
+	}
+	defer winCloseClipboard.Call()
+
+	hDrop, _, _ := winGetClipboardData.Call(winCfHDROP)
+	if hDrop == 0 {
+		return nil
+	}
+
+	// DragQueryFileW with index 0xFFFFFFFF returns the file count.
+	count, _, _ := winDragQueryFileW.Call(hDrop, 0xFFFFFFFF, 0, 0)
+	if count == 0 {
+		return nil
+	}
+
+	var paths []string
+	buf := make([]uint16, 1024)
+	for i := uintptr(0); i < count; i++ {
+		n, _, _ := winDragQueryFileW.Call(hDrop, i, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+		if n == 0 {
+			continue
+		}
+		paths = append(paths, syscall.UTF16ToString(buf[:n]))
+	}
+	return paths
 }
