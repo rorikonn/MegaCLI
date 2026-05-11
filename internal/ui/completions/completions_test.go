@@ -119,4 +119,8 @@ func TestSetItemsIncludesAddFileItem(t *testing.T) {
 	first, ok := c.allItems[0].(*CompletionItem)
 	require.True(t, ok)
 	require.Equal(t, "Add File ...", first.Text())
+
+	second, ok := c.allItems[1].(*CompletionItem)
+	require.True(t, ok)
+	require.Equal(t, "Add Folder ...", second.Text())
 }

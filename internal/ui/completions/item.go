@@ -24,6 +24,9 @@ type ResourceCompletionValue struct {
 // AddFileCompletionValue represents the "Add File ..." action item.
 type AddFileCompletionValue struct{}
 
+// AddFolderCompletionValue represents the "Add Folder ..." action item.
+type AddFolderCompletionValue struct{}
+
 // SkillCompletionValue represents a skill completion value.
 type SkillCompletionValue struct {
 	Name string

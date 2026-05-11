@@ -97,12 +97,12 @@ func NewFilePicker(com *common.Common) (*FilePicker, tea.Cmd) {
 	)
 
 	fp := filepicker.New()
-	fp.AllowedTypes = common.AllowedImageTypes
 	fp.ShowPermissions = false
 	fp.ShowSize = false
 	fp.AutoHeight = false
 	fp.Styles = com.Styles.FilePicker
 	fp.Cursor = ""
+	fp.DirAllowed = true
 	fp.CurrentDirectory = f.WorkingDir()
 
 	f.fp = fp
@@ -240,7 +240,7 @@ func (f *FilePicker) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	t := f.com.Styles
 	rc := NewRenderContext(t, width)
 	rc.Gap = 1
-	rc.Title = "Add Image"
+	rc.Title = "Add File"
 	rc.Help = f.help.View(f)
 
 	imgPreview := t.Dialog.ImagePreview.Align(lipgloss.Center).Width(innerWidth).Render(f.imagePreview(imgPrevWidth, imgPrevHeight))

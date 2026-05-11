@@ -376,6 +376,10 @@ type Styles struct {
 		Shortcut lipgloss.Style // "[alt+1]" labels.
 		Option   lipgloss.Style // Option text.
 		Selected lipgloss.Style // "✓ answer" indicator.
+
+		// Blurred (unfocused) variants.
+		BorderBlurred lipgloss.Style // Dimmed outer frame when editor is not focused.
+		TextBlurred   lipgloss.Style // Uniform dimmed text for all elements when unfocused.
 	}
 
 	// Dialog styles

@@ -85,7 +85,7 @@ func (m *UI) askUserPanelRenderedHeight() int {
 	if width <= 0 {
 		return 0
 	}
-	rendered := renderAskUserPanel(m.com.Styles, m.askUser, width)
+	rendered := renderAskUserPanel(m.com.Styles, m.askUser, width, m.focus == uiFocusEditor)
 	if rendered == "" {
 		return 0
 	}
@@ -94,29 +94,38 @@ func (m *UI) askUserPanelRenderedHeight() int {
 
 // renderAskUserProgress renders the progress indicator as small squares.
 // Current question = themed color, answered = filled square (gray),
-// unanswered = hollow square (gray).
-func renderAskUserProgress(sty *styles.Styles, s *askUserState) string {
+// unanswered = hollow square (gray). When focused is false all squares
+// use the blurred text style.
+func renderAskUserProgress(sty *styles.Styles, s *askUserState, focused bool) string {
 	as := &sty.AskUser
+	progressSty := as.Progress
+	selectedSty := as.Selected
+	if !focused {
+		progressSty = as.TextBlurred
+		selectedSty = as.TextBlurred
+	}
 	var blocks []string
 	for i := range s.request.Questions {
 		switch {
 		case i == s.current:
 			if strings.TrimSpace(s.answers[i]) != "" {
-				blocks = append(blocks, as.Selected.Render("■"))
+				blocks = append(blocks, selectedSty.Render("■"))
 			} else {
-				blocks = append(blocks, as.Selected.Render("□"))
+				blocks = append(blocks, selectedSty.Render("□"))
 			}
 		case strings.TrimSpace(s.answers[i]) != "":
-			blocks = append(blocks, as.Progress.Render("■"))
+			blocks = append(blocks, progressSty.Render("■"))
 		default:
-			blocks = append(blocks, as.Progress.Render("□"))
+			blocks = append(blocks, progressSty.Render("□"))
 		}
 	}
 	return strings.Join(blocks, " ")
 }
 
 // renderAskUserPanel renders the question panel displayed above the editor.
-func renderAskUserPanel(sty *styles.Styles, s *askUserState, width int) string {
+// When focused is false all elements are rendered in a uniform dimmed style
+// to signal that the panel is not currently interactive.
+func renderAskUserPanel(sty *styles.Styles, s *askUserState, width int, focused bool) string {
 	if s == nil || len(s.request.Questions) == 0 {
 		return ""
 	}
@@ -124,34 +133,48 @@ func renderAskUserPanel(sty *styles.Styles, s *askUserState, width int) string {
 	q := s.currentQuestion()
 	as := &sty.AskUser
 
+	// Resolve effective styles based on focus state.
+	borderSty := as.Border
+	questionSty := as.Question
+	shortcutSty := as.Shortcut
+	optionSty := as.Option
+	selectedSty := as.Selected
+	if !focused {
+		borderSty = as.BorderBlurred
+		questionSty = as.TextBlurred
+		shortcutSty = as.TextBlurred
+		optionSty = as.TextBlurred
+		selectedSty = as.TextBlurred
+	}
+
 	var inner []string
 
-	progress := renderAskUserProgress(sty, s)
+	progress := renderAskUserProgress(sty, s, focused)
 	inner = append(inner, progress)
 
-	questionText := as.Question.Render(q.Content)
+	questionText := questionSty.Render(q.Content)
 	inner = append(inner, questionText)
 
 	if len(q.Options) > 0 {
 		for i, opt := range q.Options {
 			var icon string
 			if i == s.highlight {
-				icon = as.Selected.Render("● ")
+				icon = selectedSty.Render("● ")
 			} else {
-				icon = as.Shortcut.Render("○ ")
+				icon = shortcutSty.Render("○ ")
 			}
-			num := as.Shortcut.Render(fmt.Sprintf("%d.", i+1))
-			optText := as.Option.Render(opt)
+			num := shortcutSty.Render(fmt.Sprintf("%d.", i+1))
+			optText := optionSty.Render(opt)
 			if i == s.highlight {
-				optText = as.Selected.Render(opt)
+				optText = selectedSty.Render(opt)
 			}
 			inner = append(inner, fmt.Sprintf("%s%s %s", icon, num, optText))
 		}
 	}
 
 	content := strings.Join(inner, "\n")
-	panelWidth := width - as.Border.GetHorizontalFrameSize()
-	return as.Border.Width(panelWidth).Render(content)
+	panelWidth := width - borderSty.GetHorizontalFrameSize()
+	return borderSty.Width(panelWidth).Render(content)
 }
 
 const (
@@ -307,8 +330,8 @@ func (m *UI) handleAskUserKeyPress(msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		}
 		return true, nil
 
-	// Left / Alt+[ = previous question.
-	case "left", "alt+[":
+	// Ctrl+Left / Alt+[ = previous question.
+	case "ctrl+left", "alt+[":
 		if m.askUser.current > 0 {
 			m.askUser.current--
 			m.askUser.highlight = 0
@@ -319,8 +342,8 @@ func (m *UI) handleAskUserKeyPress(msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		}
 		return true, nil
 
-	// Right / Alt+] = next question.
-	case "right", "alt+]":
+	// Ctrl+Right / Alt+] = next question.
+	case "ctrl+right", "alt+]":
 		if m.askUser.current < len(m.askUser.request.Questions)-1 {
 			m.askUser.current++
 			m.askUser.highlight = 0

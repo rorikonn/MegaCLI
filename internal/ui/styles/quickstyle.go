@@ -694,6 +694,11 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.AskUser.Shortcut = lipgloss.NewStyle().Foreground(o.fgMoreSubtle)
 	s.AskUser.Option = base
 	s.AskUser.Selected = lipgloss.NewStyle().Foreground(o.info)
+	s.AskUser.BorderBlurred = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(o.fgMostSubtle).
+		PaddingLeft(1).PaddingRight(1)
+	s.AskUser.TextBlurred = lipgloss.NewStyle().Foreground(o.fgMostSubtle)
 
 	// Tool-call action verbs and result-list styling.
 	s.Tool.ActionCreate = lipgloss.NewStyle().Foreground(o.successMoreSubtle)

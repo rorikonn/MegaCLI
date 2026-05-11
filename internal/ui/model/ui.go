@@ -36,6 +36,7 @@ import (
 	"github.com/megacli/megacli/internal/agent/tools/mcp"
 	"github.com/megacli/megacli/internal/app"
 	"github.com/megacli/megacli/internal/askuser"
+	"github.com/ncruces/zenity"
 	"github.com/megacli/megacli/internal/commands"
 	"github.com/megacli/megacli/internal/config"
 	"github.com/megacli/megacli/internal/fsext"
@@ -311,6 +312,10 @@ type UI struct {
 	// askUser holds the active ask_user tool state while the user is
 	// answering questions. nil when not in ask mode.
 	askUser *askUserState
+
+	// filePickerOpen guards against launching multiple native OS file
+	// pickers concurrently.
+	filePickerOpen bool
 
 	// hyperCredits is the remaining Hyper credits, updated after each prompt.
 	hyperCredits *int
@@ -1013,6 +1018,23 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case creditsUpdatedMsg:
 		m.hyperCredits = &msg.credits
+
+	case nativePickerSelectedMsg:
+		m.filePickerOpen = false
+		cmds = append(cmds, m.handleNativePickerSelection(msg.path))
+
+	case nativePickerClosedMsg:
+		m.filePickerOpen = false
+
+	case nativePickerErrorMsg:
+		m.filePickerOpen = false
+		cmds = append(cmds, func() tea.Msg {
+			return util.InfoMsg{
+				Type: util.InfoTypeError,
+				Msg:  fmt.Sprintf("picker error: %v", msg.err),
+			}
+		})
+
 	case util.InfoMsg:
 		if msg.Type == util.InfoTypeError {
 			slog.Error("Error reported", "error", msg.Msg)
@@ -1489,10 +1511,6 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 	case dialog.ActionClose:
 		if isOnboarding && m.dialog.ContainsDialog(dialog.ModelsID) {
 			break
-		}
-
-		if m.dialog.ContainsDialog(dialog.FilePickerID) {
-			defer fimage.ResetCache()
 		}
 
 		m.dialog.CloseFrontDialog()
@@ -2118,6 +2136,12 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 						if cmd := m.openFilesDialog(); cmd != nil {
 							cmds = append(cmds, cmd)
 						}
+					case completions.SelectionMsg[completions.AddFolderCompletionValue]:
+						m.removeCompletionTriggerText()
+						m.closeCompletions()
+						if cmd := m.openFolderDialog(); cmd != nil {
+							cmds = append(cmds, cmd)
+						}
 					case completions.SelectionMsg[completions.MCPCompletionValue]:
 						cmds = append(cmds, m.insertMCPServerCompletion(msg.Value))
 						if !msg.KeepOpen {
@@ -2159,9 +2183,6 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 
 			switch {
 			case key.Matches(msg, m.keyMap.Editor.AddImage):
-				if !m.currentModelSupportsImages() {
-					break
-				}
 				if cmd := m.openFilesDialog(); cmd != nil {
 					cmds = append(cmds, cmd)
 				}
@@ -3735,7 +3756,7 @@ func (m *UI) renderEditorView(width int) string {
 	var parts []string
 
 	if m.askUser != nil {
-		parts = append(parts, renderAskUserPanel(m.com.Styles, m.askUser, width))
+		parts = append(parts, renderAskUserPanel(m.com.Styles, m.askUser, width, m.focus == uiFocusEditor))
 	}
 
 	if line := m.editorAgentIndicator(width); line != "" {
@@ -3966,10 +3987,6 @@ func (m *UI) openDialog(id string) tea.Cmd {
 		if cmd := m.openReasoningDialog(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
-	case dialog.FilePickerID:
-		if cmd := m.openFilesDialog(); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
 	case dialog.AgentsID:
 		if cmd := m.openAgentsDialog(); cmd != nil {
 			cmds = append(cmds, cmd)
@@ -4137,19 +4154,84 @@ func (m *UI) openSessionsDialog() tea.Cmd {
 	return nil
 }
 
-// openFilesDialog opens the file picker dialog.
+// openFilesDialog opens the native OS file picker dialog.
 func (m *UI) openFilesDialog() tea.Cmd {
-	if m.dialog.ContainsDialog(dialog.FilePickerID) {
-		// Bring to front
-		m.dialog.BringToFront(dialog.FilePickerID)
+	if m.filePickerOpen {
 		return nil
 	}
+	m.filePickerOpen = true
 
-	filePicker, cmd := dialog.NewFilePicker(m.com)
-	filePicker.SetImageCapabilities(&m.caps)
-	m.dialog.OpenDialog(filePicker)
+	wd := m.com.Workspace.WorkingDir()
 
-	return cmd
+	return func() tea.Msg {
+		path, err := zenity.SelectFile(
+			zenity.Filename(wd+string(filepath.Separator)),
+			zenity.Title("Add File"),
+		)
+		if err != nil {
+			if errors.Is(err, zenity.ErrCanceled) {
+				return nativePickerClosedMsg{}
+			}
+			return nativePickerErrorMsg{err: err}
+		}
+		return nativePickerSelectedMsg{path: path}
+	}
+}
+
+// nativePickerClosedMsg is sent when the native picker is canceled.
+type nativePickerClosedMsg struct{}
+
+// nativePickerErrorMsg is sent when the native picker encounters an error.
+type nativePickerErrorMsg struct{ err error }
+
+// nativePickerSelectedMsg is sent when a path is selected in the native picker.
+type nativePickerSelectedMsg struct{ path string }
+
+// handleNativePickerSelection decides whether to attach the selected path
+// as a file or insert it as text into the textarea. The logic mirrors
+// handlePasteMsg: known attachment types are attached directly, unknown
+// types are probed by MIME (text/* → attach, else → insert path), and
+// directories are always inserted as paths.
+func (m *UI) handleNativePickerSelection(path string) tea.Cmd {
+	ext := strings.ToLower(filepath.Ext(path))
+	info, isAttachable := common.LookupAttachmentType(ext)
+	supportsImages := m.currentModelSupportsImages()
+
+	switch {
+	case isAttachable && info.NeedsImageSupport && !supportsImages:
+		return func() tea.Msg {
+			return util.ReportWarn(fmt.Sprintf("Current model does not support %s attachments", ext))
+		}
+	case isAttachable:
+		return m.handleFilePathPaste(path)
+	default:
+		return m.handleUnknownFilePaste(path)
+	}
+}
+
+// openFolderDialog opens the native OS folder picker dialog.
+func (m *UI) openFolderDialog() tea.Cmd {
+	if m.filePickerOpen {
+		return nil
+	}
+	m.filePickerOpen = true
+
+	wd := m.com.Workspace.WorkingDir()
+
+	return func() tea.Msg {
+		path, err := zenity.SelectFile(
+			zenity.Filename(wd+string(filepath.Separator)),
+			zenity.Directory(),
+			zenity.Title("Add Folder"),
+		)
+		if err != nil {
+			if errors.Is(err, zenity.ErrCanceled) {
+				return nativePickerClosedMsg{}
+			}
+			return nativePickerErrorMsg{err: err}
+		}
+		return nativePickerSelectedMsg{path: path}
+	}
 }
 
 // openPermissionsDialog opens the permissions dialog for a permission request.

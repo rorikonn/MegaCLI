@@ -169,6 +169,15 @@ func (c *Completions) SetItems(sk []SkillCompletionValue, mcps []MCPCompletionVa
 		c.matchStyle,
 	))
 
+	// Fixed "Add Folder ..." item always second.
+	items = append(items, NewCompletionItem(
+		"Add Folder ...",
+		AddFolderCompletionValue{},
+		c.normalStyle,
+		c.focusedStyle,
+		c.matchStyle,
+	))
+
 	// MCP servers.
 	for _, m := range mcps {
 		items = append(items, NewCompletionItem(
@@ -384,6 +393,11 @@ func (c *Completions) selectCurrent(keepOpen bool) tea.Msg {
 	switch item := item.Value().(type) {
 	case AddFileCompletionValue:
 		return SelectionMsg[AddFileCompletionValue]{
+			Value:    item,
+			KeepOpen: keepOpen,
+		}
+	case AddFolderCompletionValue:
+		return SelectionMsg[AddFolderCompletionValue]{
 			Value:    item,
 			KeepOpen: keepOpen,
 		}
