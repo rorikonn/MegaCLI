@@ -7,6 +7,9 @@ $Repo = "rorikonn/MegaCLI"
 $InstallDir = "$env:USERPROFILE\.megacli\bin"
 $BinaryName = "megacli.exe"
 
+# Resolve TEMP to long path in case it contains 8.3 short names (e.g. C:\Users\NAME~1.XYZ).
+$env:TEMP = [System.IO.Path]::GetFullPath($env:TEMP)
+
 function Get-LatestVersion {
     try {
         $release = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest" -Headers @{ "User-Agent" = "MegaCLI-Installer" }
