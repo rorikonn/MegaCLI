@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/megacli/megacli/internal/askuser"
 	"github.com/megacli/megacli/internal/ui/styles"
 )
@@ -62,18 +63,33 @@ func (s *askUserState) nextUnanswered() int {
 	return -1
 }
 
-// askUserPanelHeight returns the number of terminal lines the panel occupies.
-func askUserPanelHeight(s *askUserState) int {
-	if s == nil {
+// askUserPanelWidth returns the width available for rendering the ask
+// panel. This mirrors the width that renderEditorView receives.
+func (m *UI) askUserPanelWidth() int {
+	const sidebarWidth = 38
+	width := m.width
+	if m.state == uiChat && !m.isCompact {
+		width -= sidebarWidth
+	}
+	return width
+}
+
+// askUserPanelRenderedHeight returns the actual rendered height of the
+// ask panel by pre-rendering it and measuring with lipgloss.Height.
+// This accounts for text wrapping in long questions and options.
+func (m *UI) askUserPanelRenderedHeight() int {
+	if m.askUser == nil {
 		return 0
 	}
-	// Border top (1) + progress (1) + question (1) + border bottom (1) = 4.
-	height := 4
-	q := s.currentQuestion()
-	if len(q.Options) > 0 {
-		height += len(q.Options)
+	width := m.askUserPanelWidth()
+	if width <= 0 {
+		return 0
 	}
-	return height
+	rendered := renderAskUserPanel(m.com.Styles, m.askUser, width)
+	if rendered == "" {
+		return 0
+	}
+	return lipgloss.Height(rendered)
 }
 
 // renderAskUserProgress renders the progress indicator as small squares.

@@ -3709,7 +3709,7 @@ func (m *UI) editorMargin() int {
 		margin++
 	}
 	if m.askUser != nil {
-		margin += askUserPanelHeight(m.askUser)
+		margin += m.askUserPanelRenderedHeight()
 	}
 	return margin
 }
@@ -3722,7 +3722,7 @@ func (m *UI) editorContentOffset() int {
 		offset += 2
 	}
 	if m.askUser != nil {
-		offset += askUserPanelHeight(m.askUser)
+		offset += m.askUserPanelRenderedHeight()
 	}
 	if m.attachments != nil && len(m.attachments.List()) > 0 {
 		offset++

@@ -246,6 +246,6 @@ Full documentation: `docs/agents.md`
 
 **Utility:**
 - `todos` — Manage a structured task/todo list
-- `ask_user` — Ask the user a question and wait for input
+- `ask_user` — Ask the user questions with self-descriptive options (not bare labels like "A", "B")
 - `megacli_info` — Query MegaCLI configuration and environment info
 - `megacli_logs` — View MegaCLI diagnostic logs
