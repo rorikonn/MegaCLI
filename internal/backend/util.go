@@ -3,8 +3,10 @@ package backend
 import (
 	_ "embed"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 //go:embed gitignore/default
@@ -22,13 +24,14 @@ func createDotCrushDir(dir string) error {
 	case os.IsNotExist(err):
 		// First run — create the gitignore.
 	case err != nil:
-		return fmt.Errorf("failed to read .gitignore file: %q %w", gitIgnorePath, err)
-	case string(content) == defaultGitIgnore:
+		slog.Warn("Failed to read .gitignore file", "path", gitIgnorePath, "error", err)
+		return nil
+	case strings.ReplaceAll(string(content), "\r\n", "\n") == strings.ReplaceAll(defaultGitIgnore, "\r\n", "\n"):
 		return nil
 	}
 
 	if err := os.WriteFile(gitIgnorePath, []byte(defaultGitIgnore), 0o644); err != nil {
-		return fmt.Errorf("failed to write .gitignore file: %q %w", gitIgnorePath, err)
+		slog.Warn("Failed to write .gitignore file", "path", gitIgnorePath, "error", err)
 	}
 	return nil
 }
