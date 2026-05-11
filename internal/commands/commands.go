@@ -105,13 +105,9 @@ func LoadMCPPrompts() ([]MCPPrompt, error) {
 }
 
 func buildCommandSources(cfg *config.Config) []commandSource {
-	return []commandSource{
+	sources := []commandSource{
 		{
 			path:   filepath.Join(home.Config(), "megacli", "commands"),
-			prefix: userCommandPrefix,
-		},
-		{
-			path:   filepath.Join(home.Config(), "opencode", "commands"),
 			prefix: userCommandPrefix,
 		},
 		{
@@ -122,11 +118,20 @@ func buildCommandSources(cfg *config.Config) []commandSource {
 			path:   filepath.Join(cfg.Options.DataDirectory, "commands"),
 			prefix: projectCommandPrefix,
 		},
-		{
-			path:   filepath.Join(".opencode", "commands"),
-			prefix: projectCommandPrefix,
-		},
 	}
+	if config.HasCompat(cfg.Options.Compat, config.CompatOpenCode) {
+		sources = append(sources,
+			commandSource{
+				path:   filepath.Join(home.Config(), "opencode", "commands"),
+				prefix: userCommandPrefix,
+			},
+			commandSource{
+				path:   filepath.Join(".opencode", "commands"),
+				prefix: projectCommandPrefix,
+			},
+		)
+	}
+	return sources
 }
 
 func loadAll(sources []commandSource) ([]CustomCommand, error) {

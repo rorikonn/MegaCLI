@@ -44,8 +44,9 @@ Unless the user explicitly specifies a different location:
 - **Project-level**: place skill files under `.megacli/skills/` in the project root
 - **User-level (global)**: place skill files under `~/.megacli/skills/` (all platforms)
 - **Alternatives**: `.agents/skills/`, `.opencode/skills/`, `.cursor/skills/`,
-  `.claude/skills/` are supported but should only be used when the user
-  explicitly requests them
+  `.claude/skills/` are supported but require `compat` configuration in
+  `megacli.json` (e.g. `"compat": ["opencode"]`) and should only be used
+  when the user explicitly requests them
 
 ## Step 2: Choose Location
 
@@ -57,11 +58,11 @@ Based on scope, create the skill directory:
 .megacli/skills/<skill-name>/SKILL.md
 ```
 
-Other supported project directories (use only if user specifies):
-- `.agents/skills/<skill-name>/SKILL.md`
-- `.claude/skills/<skill-name>/SKILL.md`
-- `.cursor/skills/<skill-name>/SKILL.md`
-- `.opencode/skills/<skill-name>/SKILL.md`
+Other supported project directories (use only if user specifies; require
+`compat` configuration in `megacli.json`):
+- `.claude/skills/<skill-name>/SKILL.md` (requires `compat: ["claude"]`)
+- `.cursor/skills/<skill-name>/SKILL.md` (requires `compat: ["cursor"]`)
+- `.opencode/skills/<skill-name>/SKILL.md` (requires `compat: ["opencode"]`)
 
 ### Global skill
 

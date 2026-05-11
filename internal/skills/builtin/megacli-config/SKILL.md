@@ -166,9 +166,10 @@ The `$schema` property enables IDE autocomplete but is optional.
 
 > [!IMPORTANT]
 > The following skill paths are loaded by default and DO NOT NEED to be added to `skills_paths`:
-> `.agents/skills`, `.megacli/skills`, `.claude/skills`, `.cursor/skills`
+> `.agents/skills`, `.megacli/skills`. Third-party paths (`.claude/skills`, `.cursor/skills`,
+> `.opencode/skills`) require `"compat"` configuration, e.g. `"compat": ["claude", "cursor"]`.
 
-Other options: `context_paths`, `progress`, `disable_notifications`, `disable_auto_summarize`, `disable_metrics`, `disable_provider_auto_update`, `disable_default_providers`, `data_directory`, `initialize_as`.
+Other options: `compat`, `context_paths`, `progress`, `disable_notifications`, `disable_auto_summarize`, `disable_metrics`, `disable_provider_auto_update`, `disable_default_providers`, `data_directory`, `initialize_as`.
 
 ## Hooks
 

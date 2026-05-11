@@ -27,16 +27,20 @@ const (
 	defaultInitializeAs  = "AGENTS.md"
 )
 
+// Compat key constants for third-party tool compatibility.
+const (
+	CompatClaude   = "claude"
+	CompatCursor   = "cursor"
+	CompatCopilot  = "copilot"
+	CompatGemini   = "gemini"
+	CompatOpenCode = "opencode"
+)
+
+// defaultContextPaths contains only MegaCli-native context file paths.
+// Third-party paths are added conditionally via Options.Compat.
 var defaultContextPaths = []string{
 	".megacli/AGENTS.md",
 	".megacli/MEGACLI.md",
-	".github/copilot-instructions.md",
-	".cursorrules",
-	".cursor/rules/",
-	"CLAUDE.md",
-	"CLAUDE.local.md",
-	"GEMINI.md",
-	"gemini.md",
 	"megacli.md",
 	"megacli.local.md",
 	"MegaCli.md",
@@ -46,6 +50,11 @@ var defaultContextPaths = []string{
 	"AGENTS.md",
 	"agents.md",
 	"Agents.md",
+}
+
+// HasCompat reports whether the given compat key is present in the list.
+func HasCompat(compat []string, name string) bool {
+	return slices.Contains(compat, name)
 }
 
 type SelectedModelType string
@@ -276,6 +285,7 @@ type Options struct {
 	Progress                  *bool        `json:"progress,omitempty" jsonschema:"description=Show indeterminate progress updates during long operations,default=true"`
 	DisableNotifications      bool         `json:"disable_notifications,omitempty" jsonschema:"description=Disable desktop notifications,default=false"`
 	DisabledSkills            []string     `json:"disabled_skills,omitempty" jsonschema:"description=List of skill names to disable and hide from the agent,example=megacli-config"`
+	Compat                    []string     `json:"compat,omitempty" jsonschema:"description=Enable compatibility with third-party tool directories and context files. Each entry is a tool name whose paths will be loaded.,enum=claude,enum=cursor,enum=copilot,enum=gemini,enum=opencode"`
 }
 
 type MCPs map[string]MCPConfig
@@ -677,10 +687,10 @@ func (c *Config) SetupAgents() {
 // Global agents are discovered first, then project agents override them.
 func (c *Config) mergeFolderAgents(agents map[string]Agent, allowedTools []string) {
 	// Global directories first (lowest priority among folder agents).
-	dirs := GlobalAgentDirs()
+	dirs := GlobalAgentDirs(c.Options.Compat)
 	// Project directories second (override global).
 	if c.workingDir != "" {
-		dirs = append(dirs, ProjectAgentDirs(c.workingDir)...)
+		dirs = append(dirs, ProjectAgentDirs(c.workingDir, c.Options.Compat)...)
 	}
 
 	discovered := DiscoverAgentDirs(dirs)

@@ -58,6 +58,42 @@ func TestConfig_setDefaults(t *testing.T) {
 	for _, path := range defaultContextPaths {
 		require.Contains(t, cfg.Options.ContextPaths, path)
 	}
+
+	// Without compat, third-party context paths must be absent.
+	thirdPartyPaths := []string{
+		"CLAUDE.md", "CLAUDE.local.md",
+		".cursorrules", ".cursor/rules/",
+		"GEMINI.md", "gemini.md",
+		".github/copilot-instructions.md",
+	}
+	for _, p := range thirdPartyPaths {
+		require.NotContains(t, cfg.Options.ContextPaths, p,
+			"third-party path %q should not be present without compat", p)
+	}
+}
+
+func TestConfig_setDefaultsWithCompat(t *testing.T) {
+	cfg := &Config{
+		Options: &Options{
+			Compat: []string{CompatClaude, CompatCursor, CompatCopilot, CompatGemini},
+		},
+	}
+
+	cfg.setDefaults("/tmp", "")
+
+	// Native paths are always present.
+	for _, path := range defaultContextPaths {
+		require.Contains(t, cfg.Options.ContextPaths, path)
+	}
+
+	// Compat-enabled third-party paths must be present.
+	require.Contains(t, cfg.Options.ContextPaths, "CLAUDE.md")
+	require.Contains(t, cfg.Options.ContextPaths, "CLAUDE.local.md")
+	require.Contains(t, cfg.Options.ContextPaths, ".cursorrules")
+	require.Contains(t, cfg.Options.ContextPaths, ".cursor/rules/")
+	require.Contains(t, cfg.Options.ContextPaths, ".github/copilot-instructions.md")
+	require.Contains(t, cfg.Options.ContextPaths, "GEMINI.md")
+	require.Contains(t, cfg.Options.ContextPaths, "gemini.md")
 }
 
 func TestConfig_configureProviders(t *testing.T) {

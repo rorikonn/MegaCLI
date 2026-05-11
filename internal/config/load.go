@@ -448,20 +448,34 @@ func (c *Config) setDefaults(workingDir, dataDir string) {
 	// Apply defaults to LSP configurations
 	c.applyLSPDefaults()
 
-	// Add the default context paths if they are not already present
-	c.Options.ContextPaths = append(defaultContextPaths, c.Options.ContextPaths...)
+	// Start with MegaCli-native context paths, then conditionally add
+	// third-party paths based on the compat configuration.
+	paths := append([]string{}, defaultContextPaths...)
+	if HasCompat(c.Options.Compat, CompatCopilot) {
+		paths = append(paths, ".github/copilot-instructions.md")
+	}
+	if HasCompat(c.Options.Compat, CompatCursor) {
+		paths = append(paths, ".cursorrules", ".cursor/rules/")
+	}
+	if HasCompat(c.Options.Compat, CompatClaude) {
+		paths = append(paths, "CLAUDE.md", "CLAUDE.local.md")
+	}
+	if HasCompat(c.Options.Compat, CompatGemini) {
+		paths = append(paths, "GEMINI.md", "gemini.md")
+	}
+	c.Options.ContextPaths = append(paths, c.Options.ContextPaths...)
 	slices.Sort(c.Options.ContextPaths)
 	c.Options.ContextPaths = slices.Compact(c.Options.ContextPaths)
 
 	// Add the default skills directories if not already present.
-	for _, dir := range GlobalSkillsDirs() {
+	for _, dir := range GlobalSkillsDirs(c.Options.Compat) {
 		if !slices.Contains(c.Options.SkillsPaths, dir) {
 			c.Options.SkillsPaths = append(c.Options.SkillsPaths, dir)
 		}
 	}
 
 	// Project specific skills dirs.
-	c.Options.SkillsPaths = append(c.Options.SkillsPaths, ProjectSkillsDir(workingDir)...)
+	c.Options.SkillsPaths = append(c.Options.SkillsPaths, ProjectSkillsDir(workingDir, c.Options.Compat)...)
 
 	if str, ok := os.LookupEnv("MEGACLI_DISABLE_PROVIDER_AUTO_UPDATE"); ok {
 		c.Options.DisableProviderAutoUpdate, _ = strconv.ParseBool(str)
@@ -913,7 +927,7 @@ func isInsideWorktree() bool {
 // GlobalSkillsDirs returns the default directories for Agent Skills.
 // Skills in these directories are auto-discovered and their files can be read
 // without permission prompts. ~/.megacli/skills/ is the preferred location.
-func GlobalSkillsDirs() []string {
+func GlobalSkillsDirs(compat []string) []string {
 	if skillsDir := os.Getenv("MEGACLI_SKILLS_DIR"); skillsDir != "" {
 		return []string{skillsDir}
 	}
@@ -922,7 +936,9 @@ func GlobalSkillsDirs() []string {
 		filepath.Join(home.DotMegaCLI(), "skills"),
 		filepath.Join(home.Config(), appName, "skills"),
 		filepath.Join(home.Config(), "agents", "skills"),
-		filepath.Join(home.Config(), "opencode", "skills"),
+	}
+	if HasCompat(compat, CompatOpenCode) {
+		paths = append(paths, filepath.Join(home.Config(), "opencode", "skills"))
 	}
 
 	// On Windows, also load from app data for backwards compatibility.
@@ -943,14 +959,21 @@ func GlobalSkillsDirs() []string {
 
 // ProjectSkillsDir returns the default project directories for which
 // MegaCLI will look for skills.
-func ProjectSkillsDir(workingDir string) []string {
-	return []string{
+func ProjectSkillsDir(workingDir string, compat []string) []string {
+	paths := []string{
 		filepath.Join(workingDir, ".agents/skills"),
 		filepath.Join(workingDir, ".megacli/skills"),
-		filepath.Join(workingDir, ".claude/skills"),
-		filepath.Join(workingDir, ".cursor/skills"),
-		filepath.Join(workingDir, ".opencode/skills"),
 	}
+	if HasCompat(compat, CompatClaude) {
+		paths = append(paths, filepath.Join(workingDir, ".claude/skills"))
+	}
+	if HasCompat(compat, CompatCursor) {
+		paths = append(paths, filepath.Join(workingDir, ".cursor/skills"))
+	}
+	if HasCompat(compat, CompatOpenCode) {
+		paths = append(paths, filepath.Join(workingDir, ".opencode/skills"))
+	}
+	return paths
 }
 
 func isAppleTerminal() bool { return os.Getenv("TERM_PROGRAM") == "Apple_Terminal" }

@@ -131,12 +131,12 @@ Folder-based agents are discovered from these directories:
 **Project-level:**
 - `.megacli/agents/`
 - `.agents/`
-- `.opencode/agents/`
+- `.opencode/agents/` *(requires `compat: ["opencode"]`)*
 
 **Global:**
 - `~/.config/megacli/agents/`
 - `~/.config/agents/`
-- `~/.config/opencode/agents/`
+- `~/.config/opencode/agents/` *(requires `compat: ["opencode"]`)*
 
 ### Priority (low to high)
 

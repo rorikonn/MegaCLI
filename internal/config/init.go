@@ -43,7 +43,7 @@ func ProjectNeedsInitialization(store *ConfigStore) (bool, error) {
 		return false, fmt.Errorf("failed to check init flag file: %w", err)
 	}
 
-	someContextFileExists, err := contextPathsExist(store.WorkingDir())
+	someContextFileExists, err := contextPathsExist(store.WorkingDir(), cfg.Options.ContextPaths)
 	if err != nil {
 		return false, fmt.Errorf("failed to check for context files: %w", err)
 	}
@@ -63,7 +63,7 @@ func ProjectNeedsInitialization(store *ConfigStore) (bool, error) {
 	return true, nil
 }
 
-func contextPathsExist(dir string) (bool, error) {
+func contextPathsExist(dir string, contextPaths []string) (bool, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return false, err
@@ -77,9 +77,9 @@ func contextPathsExist(dir string) (bool, error) {
 		}
 	}
 
-	// Check if any of the default context paths exist in the directory
-	for _, path := range defaultContextPaths {
-		// Extract just the filename from the path
+	// Check if any of the resolved context paths exist in the directory.
+	for _, path := range contextPaths {
+		// Extract just the filename from the path.
 		_, filename := filepath.Split(path)
 		filename = strings.ToLower(filename)
 

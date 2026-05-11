@@ -248,23 +248,28 @@ func discoverSubagents(agentDir string, agents map[string]Agent) {
 
 // ProjectAgentDirs returns the project-level directories to scan for
 // folder-based agent definitions.
-func ProjectAgentDirs(workingDir string) []string {
-	return []string{
+func ProjectAgentDirs(workingDir string, compat []string) []string {
+	paths := []string{
 		filepath.Join(workingDir, ".megacli", "agents"),
 		filepath.Join(workingDir, ".agents"),
-		filepath.Join(workingDir, ".opencode", "agents"),
 	}
+	if HasCompat(compat, CompatOpenCode) {
+		paths = append(paths, filepath.Join(workingDir, ".opencode", "agents"))
+	}
+	return paths
 }
 
 // GlobalAgentDirs returns the global directories to scan for
 // folder-based agent definitions. ~/.megacli/agents/ is the preferred
 // location on all platforms.
-func GlobalAgentDirs() []string {
+func GlobalAgentDirs(compat []string) []string {
 	paths := []string{
 		filepath.Join(home.DotMegaCLI(), "agents"),
 		filepath.Join(home.Config(), appName, "agents"),
 		filepath.Join(home.Config(), "agents"),
-		filepath.Join(home.Config(), "opencode", "agents"),
+	}
+	if HasCompat(compat, CompatOpenCode) {
+		paths = append(paths, filepath.Join(home.Config(), "opencode", "agents"))
 	}
 
 	if runtime.GOOS == "windows" {

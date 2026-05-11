@@ -133,12 +133,12 @@ agent fields listed above.
 **Discovery paths (project-level):**
 - `.megacli/agents/`
 - `.agents/`
-- `.opencode/agents/`
+- `.opencode/agents/` *(requires `compat: ["opencode"]`)*
 
 **Discovery paths (global):**
 - `~/.config/megacli/agents/`
 - `~/.config/agents/`
-- `~/.config/opencode/agents/`
+- `~/.config/opencode/agents/` *(requires `compat: ["opencode"]`)*
 
 **Priority (low to high):**
 1. Folder-based agents (global directories)

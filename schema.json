@@ -1,8 +1,76 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/charmbracelet/crush/internal/config/config",
+  "$id": "https://github.com/megacli/megacli/internal/config/config",
   "$ref": "#/$defs/Config",
   "$defs": {
+    "Agent": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "disabled": {
+          "type": "boolean"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "primary",
+            "subagent"
+          ],
+          "description": "Agent role: primary (user-switchable) or subagent (internal only)",
+          "default": "primary"
+        },
+        "model": {
+          "type": "string",
+          "enum": [
+            "large",
+            "small"
+          ],
+          "description": "The model type to use for this agent",
+          "default": "large"
+        },
+        "allowed_tools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "allowed_mcp": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": "object"
+        },
+        "context_paths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Built-in prompt template name (e.g. coder or task)"
+        },
+        "prompt_file": {
+          "type": "string",
+          "description": "Path to a custom prompt template file on disk"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "model"
+      ]
+    },
     "Attribution": {
       "properties": {
         "trailer_style": {
@@ -21,9 +89,7 @@
           "deprecated": true
         },
         "generated_with": {
-          "type": "boolean",
-          "description": "Add Generated with Crush line to commit messages and issues and PRs",
-          "default": true
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -99,6 +165,21 @@
           },
           "type": "object",
           "description": "User-defined shell commands that fire on hook events (e.g. PreToolUse)"
+        },
+        "orchestrator": {
+          "$ref": "#/$defs/OrchestratorConfig",
+          "description": "Multi-agent orchestrator configuration"
+        },
+        "ipc": {
+          "$ref": "#/$defs/IPCConfig",
+          "description": "Inter-process communication settings"
+        },
+        "agents": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Agent"
+          },
+          "type": "object",
+          "description": "Agent definitions and overrides (keyed by agent ID)"
         }
       },
       "additionalProperties": false,
@@ -125,6 +206,22 @@
       "required": [
         "command"
       ]
+    },
+    "IPCConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable IPC server for cross-instance communication",
+          "default": true
+        },
+        "port": {
+          "type": "integer",
+          "description": "Fixed TCP port for IPC (0 = auto-assign)",
+          "default": 0
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "LSPConfig": {
       "properties": {
@@ -380,12 +477,16 @@
     },
     "Options": {
       "properties": {
+        "name": {
+          "type": "string",
+          "description": "Instance name for cross-process identification"
+        },
         "context_paths": {
           "items": {
             "type": "string",
             "examples": [
               ".cursorrules",
-              "CRUSH.md"
+              "MEGACLI.md"
             ]
           },
           "type": "array",
@@ -395,7 +496,7 @@
           "items": {
             "type": "string",
             "examples": [
-              "~/.config/crush/skills",
+              "~/.config/megacli/skills",
               "./skills"
             ]
           },
@@ -424,10 +525,7 @@
         "data_directory": {
           "type": "string",
           "description": "Directory for storing application data (relative to working directory)",
-          "default": ".crush",
-          "examples": [
-            ".crush"
-          ]
+          "default": ".megacli"
         },
         "disabled_tools": {
           "items": {
@@ -465,7 +563,7 @@
           "default": "AGENTS.md",
           "examples": [
             "AGENTS.md",
-            "CRUSH.md",
+            "MEGACLI.md",
             "CLAUDE.md",
             "docs/LLMs.md"
           ]
@@ -489,11 +587,75 @@
           "items": {
             "type": "string",
             "examples": [
-              "crush-config"
+              "megacli-config"
             ]
           },
           "type": "array",
           "description": "List of skill names to disable and hide from the agent"
+        },
+        "compat": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "claude",
+              "cursor",
+              "copilot",
+              "gemini",
+              "opencode"
+            ]
+          },
+          "type": "array",
+          "description": "Enable compatibility with third-party tool directories and context files. Each entry is a tool name whose paths will be loaded."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "OrchestratorAgentConfig": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique name for this agent"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "primary",
+            "secondary"
+          ],
+          "description": "Agent role: primary or secondary"
+        },
+        "model": {
+          "type": "string",
+          "description": "Model override for this agent (defaults to the global large model)"
+        },
+        "tools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Allowed tool names for this agent"
+        },
+        "system_prompt_template": {
+          "type": "string",
+          "description": "Path to a custom system prompt template"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "role"
+      ]
+    },
+    "OrchestratorConfig": {
+      "properties": {
+        "agents": {
+          "items": {
+            "$ref": "#/$defs/OrchestratorAgentConfig"
+          },
+          "type": "array",
+          "description": "Agent definitions for the orchestrator"
         }
       },
       "additionalProperties": false,
@@ -511,6 +673,11 @@
           },
           "type": "array",
           "description": "List of tools that don't require permission prompts"
+        },
+        "yolo": {
+          "type": "boolean",
+          "description": "Automatically accept all permission requests (dangerous)",
+          "default": false
         }
       },
       "additionalProperties": false,
@@ -594,6 +761,13 @@
           },
           "type": "array",
           "description": "List of models available from this provider"
+        },
+        "advanced_models": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Model IDs hidden by default in the model picker"
         }
       },
       "additionalProperties": false,
@@ -623,10 +797,6 @@
             "high"
           ],
           "description": "Reasoning effort level for OpenAI models that support it"
-        },
-        "think": {
-          "type": "boolean",
-          "description": "Enable thinking mode for Anthropic models that support reasoning"
         },
         "max_tokens": {
           "type": "integer",
