@@ -19,6 +19,17 @@ Guidelines:
 - Bad: {"content": "Which approach?\n  A) Use caching\n  B) Use streaming\n  C) Use polling", "options": ["A", "B", "C"]}
 - Good: {"content": "Which approach do you prefer?", "options": ["Use caching for faster repeated access", "Use streaming for real-time updates", "Use polling for simplicity"]}
 
+One question per Question object:
+- CRITICAL: Each Question object MUST ask exactly ONE question about ONE
+  topic. NEVER combine multiple sub-questions into a single content field.
+  If you need to ask N separate things, create N separate Question objects.
+- NEVER embed lettered or numbered sub-options (A/B/C, 1/2/3) inside the
+  content field — that is what the options array is for.
+- NEVER use combined option labels like "1A, 2B, 3A" that reference multiple
+  sub-questions. Each question is independent with its own independent options.
+- Bad: {"content": "1. Should we use caching?\n  A) Yes\n  B) No\n2. Which format?\n  A) JSON\n  B) XML", "options": ["1A, 2A", "1A, 2B", "1B, 2A", "1B, 2B"]}
+- Good: Two separate questions — {"content": "Should we use caching?", "options": ["Yes", "No"]}, {"content": "Which format do you prefer?", "options": ["JSON", "XML"]}
+
 Formatting rules for question content:
 - CRITICAL: When a question has NO options (open-ended), the content MUST be
   a single clear sentence or short paragraph. Do NOT use numbered lists

@@ -16,6 +16,16 @@ import (
 // whose content looks like selectable options.
 var listPatternRe = regexp.MustCompile(`(?m)^\s*(\d+[.)]\s|[-*]\s)`)
 
+// embeddedSubOptionsRe matches lettered sub-options (A) / B) / - A) etc.)
+// embedded inside question content. This detects the anti-pattern where
+// multiple sub-questions with their own choices are crammed into one
+// question.
+var embeddedSubOptionsRe = regexp.MustCompile(`(?m)^\s*-?\s*[A-Z]\)\s`)
+
+// combinedOptionLabelRe matches combined option labels like "1A, 2B, 3A"
+// which indicate the LLM combined multiple independent questions into one.
+var combinedOptionLabelRe = regexp.MustCompile(`^\d+[A-Z](?:,\s*\d+[A-Z])+$`)
+
 //go:embed ask_user.md
 var askUserDescription []byte
 
@@ -48,6 +58,20 @@ func NewAskUserTool(svc askuser.Service) fantasy.AgentTool {
 							"in their content — split them into separate Question objects instead", i+1,
 					)), nil
 				}
+				if len(q.Options) > 0 && embeddedSubOptionsRe.MatchString(q.Content) {
+					return fantasy.NewTextErrorResponse(fmt.Sprintf(
+						"question %d: content contains embedded sub-options (A/B/C). "+
+							"Each question must ask ONE thing — split multiple sub-questions into "+
+							"separate Question objects, each with its own options array", i+1,
+					)), nil
+				}
+				if len(q.Options) > 0 && hasCombinedOptionLabels(q.Options) {
+					return fantasy.NewTextErrorResponse(fmt.Sprintf(
+						"question %d: options contain combined labels (e.g. '1A, 2B, 3A'). "+
+							"Each question must be independent — split into separate Question objects, "+
+							"each with its own self-descriptive options", i+1,
+					)), nil
+				}
 			}
 
 			sessionID := GetSessionFromContext(ctx)
@@ -69,4 +93,20 @@ func NewAskUserTool(svc askuser.Service) fantasy.AgentTool {
 
 			return fantasy.NewTextResponse(sb.String()), nil
 		})
+}
+
+// hasCombinedOptionLabels returns true if the majority of options look
+// like combined labels referencing multiple sub-questions (e.g.
+// "1A, 2B, 3A").
+func hasCombinedOptionLabels(options []string) bool {
+	if len(options) == 0 {
+		return false
+	}
+	matches := 0
+	for _, o := range options {
+		if combinedOptionLabelRe.MatchString(strings.TrimSpace(o)) {
+			matches++
+		}
+	}
+	return matches > len(options)/2
 }
