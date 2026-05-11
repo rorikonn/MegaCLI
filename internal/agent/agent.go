@@ -125,7 +125,8 @@ type sessionAgent struct {
 	messageQueue   *csync.Map[string, []SessionAgentCall]
 	activeRequests *csync.Map[string, context.CancelFunc]
 
-	tokenAccum *csync.Map[string, session.TokenAccum]
+	tokenAccum    *csync.Map[string, session.TokenAccum]
+	llmCommLogger *LLMCommLogger
 }
 
 type SessionAgentOptions struct {
@@ -140,11 +141,17 @@ type SessionAgentOptions struct {
 	Messages             message.Service
 	Tools                []fantasy.AgentTool
 	Notify               pubsub.Publisher[notify.Notification]
+	DataDirectory        string
+	Debug                bool
 }
 
 func NewSessionAgent(
 	opts SessionAgentOptions,
 ) SessionAgent {
+	var llmCommLogger *LLMCommLogger
+	if opts.Debug {
+		llmCommLogger = NewLLMCommLogger(opts.DataDirectory)
+	}
 	return &sessionAgent{
 		largeModel:           csync.NewValue(opts.LargeModel),
 		smallModel:           csync.NewValue(opts.SmallModel),
@@ -160,6 +167,7 @@ func NewSessionAgent(
 		messageQueue:         csync.NewMap[string, []SessionAgentCall](),
 		activeRequests:       csync.NewMap[string, context.CancelFunc](),
 		tokenAccum:           csync.NewMap[string, session.TokenAccum](),
+		llmCommLogger:        llmCommLogger,
 	}
 }
 
@@ -261,10 +269,15 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 
 	var currentAssistant *message.Message
 	var shouldSummarize bool
+	var turnStepNum int
+	var turnToolNames []string
 	// Don't send MaxOutputTokens if 0 — some providers (e.g. LM Studio) reject it
 	var maxOutputTokens *int64
 	if call.MaxOutputTokens > 0 {
 		maxOutputTokens = &call.MaxOutputTokens
+	}
+	if a.llmCommLogger != nil {
+		a.llmCommLogger.LogTurnStart(call.SessionID, call.Prompt, activeModel.CatwalkCfg.Name, activeModel.ModelCfg.Provider, len(call.Prompt), turnStepNum)
 	}
 	result, err := agent.Stream(genCtx, fantasy.AgentStreamCall{
 		Prompt:           message.PromptWithTextAttachments(call.Prompt, call.Attachments),
@@ -285,6 +298,15 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 
 			// Use latest tools (updated by SetTools when MCP tools change).
 			prepared.Tools = a.tools.Copy()
+			turnStepNum++
+
+			if a.llmCommLogger != nil {
+				toolNames := make([]string, len(prepared.Tools))
+				for i, t := range prepared.Tools {
+					toolNames[i] = t.Info().Name
+				}
+				a.llmCommLogger.LogStepRequest(call.SessionID, turnStepNum, len(prepared.Messages), toolNames, activeModel.CatwalkCfg.Name)
+			}
 
 			queuedCalls, _ := a.messageQueue.Get(call.SessionID)
 			a.messageQueue.Del(call.SessionID)
@@ -389,6 +411,10 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			slog.Warn("Provider request failed, retrying", providerRetryLogFields(err, delay)...)
 		},
 		OnToolCall: func(tc fantasy.ToolCallContent) error {
+			if a.llmCommLogger != nil {
+				a.llmCommLogger.LogToolCall(call.SessionID, tc)
+				turnToolNames = append(turnToolNames, tc.ToolName)
+			}
 			toolCall := message.ToolCall{
 				ID:               tc.ToolCallID,
 				Name:             tc.ToolName,
@@ -401,8 +427,11 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			// even if the request is canceled mid-stream
 			return a.messages.Update(ctx, *currentAssistant)
 		},
-		OnToolResult: func(result fantasy.ToolResultContent) error {
-			toolResult := a.convertToToolResult(result)
+		OnToolResult: func(toolResultContent fantasy.ToolResultContent) error {
+			if a.llmCommLogger != nil {
+				a.llmCommLogger.LogToolResult(call.SessionID, toolResultContent)
+			}
+			toolResult := a.convertToToolResult(toolResultContent)
 			// Use parent ctx instead of genCtx to ensure the message is created
 			// even if the request is canceled mid-stream
 			_, createMsgErr := a.messages.Create(ctx, currentAssistant.SessionID, message.CreateMessageParams{
@@ -414,6 +443,9 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			return createMsgErr
 		},
 		OnStepFinish: func(stepResult fantasy.StepResult) error {
+			if a.llmCommLogger != nil {
+				a.llmCommLogger.LogStepResponse(call.SessionID, turnStepNum, stepResult)
+			}
 			finishReason := message.FinishReasonUnknown
 			switch stepResult.FinishReason {
 			case fantasy.FinishReasonLength:
@@ -482,6 +514,9 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 	a.eventPromptResponded(call.SessionID, activeModel, time.Since(startTime).Truncate(time.Second))
 
 	if err != nil {
+		if a.llmCommLogger != nil && result != nil {
+			a.llmCommLogger.LogTurnError(call.SessionID, turnStepNum, result.TotalUsage, time.Since(startTime), turnToolNames, err)
+		}
 		isHyper := activeModel.ModelCfg.Provider == hyper.Name
 		isCancelErr := errors.Is(err, context.Canceled)
 		if currentAssistant == nil {
@@ -597,6 +632,10 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			SessionTitle: currentSession.Title,
 			Type:         notify.TypeAgentFinished,
 		})
+	}
+
+	if a.llmCommLogger != nil && result != nil {
+		a.llmCommLogger.LogTurnEnd(call.SessionID, turnStepNum, result.TotalUsage, time.Since(startTime), turnToolNames)
 	}
 
 	if shouldSummarize {

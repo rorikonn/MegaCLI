@@ -187,6 +187,8 @@ func (c *coordinator) agenticFetchTool(_ context.Context, client *http.Client) (
 				Sessions:             c.sessions,
 				Messages:             c.messages,
 				Tools:                fetchTools,
+				DataDirectory:        c.cfg.Config().Options.DataDirectory,
+				Debug:                c.cfg.Config().Options.Debug,
 			})
 
 			return c.runSubAgent(ctx, subAgentParams{

@@ -2868,7 +2868,7 @@ func (m *UI) currentModelSupportsImages() bool {
 		slog.Warn("currentModelSupportsImages: model not found", "model_type", agentCfg.Model)
 		return false
 	}
-	slog.Info("currentModelSupportsImages", "model_id", model.ID, "supports_images", model.SupportsImages)
+	slog.Debug("currentModelSupportsImages", "model_id", model.ID, "supports_images", model.SupportsImages)
 	return model.SupportsImages
 }
 

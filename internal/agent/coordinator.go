@@ -571,6 +571,8 @@ func (c *coordinator) buildAgent(ctx context.Context, prompt *prompt.Prompt, age
 		Messages:             c.messages,
 		Tools:                nil,
 		Notify:               c.notify,
+		DataDirectory:        c.cfg.Config().Options.DataDirectory,
+		Debug:                c.cfg.Config().Options.Debug,
 	})
 
 	c.readyWg.Go(func() error {
@@ -712,6 +714,8 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubA
 	if !isSubAgent {
 		filteredTools = c.wrapToolsWithGating(filteredTools)
 	}
+
+	filteredTools = wrapToolsWithLogging(filteredTools)
 
 	return filteredTools, nil
 }
@@ -1393,10 +1397,10 @@ func (c *coordinator) updateParentSessionCost(ctx context.Context, childSessionI
 // so the coordinator can re-publish the correct subset on agent
 // switches.
 type discoverSkillsResult struct {
-	allSkills   []*skills.Skill
+	allSkills    []*skills.Skill
 	activeSkills []*skills.Skill
-	baseStates  []*skills.SkillState
-	agentStates map[string][]*skills.SkillState
+	baseStates   []*skills.SkillState
+	agentStates  map[string][]*skills.SkillState
 }
 
 func discoverSkills(cfg *config.ConfigStore, initialAgent string) discoverSkillsResult {
