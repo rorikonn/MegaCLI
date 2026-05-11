@@ -92,6 +92,8 @@ type (
 	ActionEnableDockerMCP struct{}
 	// ActionDisableDockerMCP is a message to disable Docker MCP.
 	ActionDisableDockerMCP struct{}
+	// ActionRetryMCPConnections is a message to retry failed MCP connections.
+	ActionRetryMCPConnections struct{}
 )
 
 // Messages for API key input dialog.

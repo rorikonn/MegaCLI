@@ -429,6 +429,10 @@ func (w *AppWorkspace) DisableDockerMCP() error {
 	return w.store.DisableDockerMCP()
 }
 
+func (w *AppWorkspace) RetryFailedMCPs(ctx context.Context) (int, []error) {
+	return mcptools.RetryFailedMCPs(ctx, w.store)
+}
+
 // -- Lifecycle --
 
 func (w *AppWorkspace) Subscribe(program *tea.Program) {

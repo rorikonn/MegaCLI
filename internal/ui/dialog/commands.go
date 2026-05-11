@@ -478,6 +478,9 @@ func (c *Commands) defaultCommands() []*CommandItem {
 		commands = append(commands, NewCommandItem(c.com.Styles, "disable_docker_mcp", "Disable Docker MCP Catalog", "", ActionDisableDockerMCP{}))
 	}
 
+	// Add retry MCP connections command.
+	commands = append(commands, NewCommandItem(c.com.Styles, "retry_mcp", "Retry MCP Connections", "", ActionRetryMCPConnections{}))
+
 	if c.hasTodos || c.hasQueue {
 		var label string
 		switch {

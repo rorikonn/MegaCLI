@@ -145,6 +145,7 @@ type Workspace interface {
 	GetMCPPrompt(clientID, promptID string, args map[string]string) (string, error)
 	EnableDockerMCP(ctx context.Context) error
 	DisableDockerMCP() error
+	RetryFailedMCPs(ctx context.Context) (int, []error)
 
 	// Agent switching
 	AgentSwitch(ctx context.Context, name string) (deferred bool, err error)

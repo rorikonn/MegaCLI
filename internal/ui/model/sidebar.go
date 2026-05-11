@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/ultraviolet/layout"
+	"github.com/megacli/megacli/internal/agent/tools/mcp"
 	"github.com/megacli/megacli/internal/ui/common"
 	"github.com/megacli/megacli/internal/ui/logo"
 	"github.com/megacli/megacli/internal/ui/styles"
@@ -192,8 +193,12 @@ func (m *UI) drawSidebar(scr uv.Screen, area uv.Rectangle) {
 	lspsCount := len(m.lspStates)
 
 	mcpsCount := 0
+	mcpStates := m.mcpStates
+	if len(mcpStates) == 0 {
+		mcpStates = mcp.GetStates()
+	}
 	for _, mcpCfg := range m.com.Config().MCP.Sorted() {
-		if _, ok := m.mcpStates[mcpCfg.Name]; ok {
+		if _, ok := mcpStates[mcpCfg.Name]; ok {
 			mcpsCount++
 		}
 	}

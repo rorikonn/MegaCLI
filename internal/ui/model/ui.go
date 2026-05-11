@@ -1664,6 +1664,9 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 	case dialog.ActionDisableDockerMCP:
 		m.dialog.CloseDialog(dialog.CommandsID)
 		cmds = append(cmds, m.disableDockerMCP)
+	case dialog.ActionRetryMCPConnections:
+		m.dialog.CloseDialog(dialog.CommandsID)
+		cmds = append(cmds, m.retryMCPConnections)
 	case dialog.ActionInitializeProject:
 		if m.isAgentBusy() {
 			cmds = append(cmds, util.ReportWarn("Agent is busy, please wait before summarizing session..."))
@@ -3304,6 +3307,7 @@ func (m *UI) buildSlashItems() []*slashcompletions.SlashItem {
 	items = append(items,
 		slashcompletions.NewSlashItem("Toggle Yolo Mode", dialog.ActionToggleYoloMode{}, normal, focused, match),
 		slashcompletions.NewSlashItem("Toggle Help", dialog.ActionToggleHelp{}, normal, focused, match),
+		slashcompletions.NewSlashItem("Retry MCP Connections", dialog.ActionRetryMCPConnections{}, normal, focused, match),
 	)
 
 	// Agents.
@@ -3425,6 +3429,8 @@ func (m *UI) handleSlashAction(action any) tea.Cmd {
 	case dialog.ActionToggleHelp:
 		m.status.ToggleHelp()
 		return nil
+	case dialog.ActionRetryMCPConnections:
+		return m.retryMCPConnections
 	case dialog.ActionSummarize:
 		if m.isAgentBusy() {
 			return util.ReportWarn("Agent is busy, please wait before summarizing session...")
@@ -4829,6 +4835,25 @@ func (m *UI) disableDockerMCP() tea.Msg {
 	}
 
 	return util.NewInfoMsg("Docker MCP disabled successfully")
+}
+
+func (m *UI) retryMCPConnections() tea.Msg {
+	ctx := context.Background()
+	success, errs := m.com.Workspace.RetryFailedMCPs(ctx)
+	if len(errs) > 0 {
+		var msgs []string
+		for _, e := range errs {
+			msgs = append(msgs, e.Error())
+		}
+		if success > 0 {
+			return util.NewInfoMsg(fmt.Sprintf("Retried %d MCP(s) successfully, %d failed: %s", success, len(errs), strings.Join(msgs, "; ")))
+		}
+		return util.ReportError(fmt.Errorf("MCP retry failed: %s", strings.Join(msgs, "; ")))()
+	}
+	if success > 0 {
+		return util.NewInfoMsg(fmt.Sprintf("Retried %d MCP connection(s) successfully", success))
+	}
+	return util.NewInfoMsg("All MCP connections are already healthy")
 }
 
 // cacheSidebarLogo renders and caches the sidebar logo at the specified width.

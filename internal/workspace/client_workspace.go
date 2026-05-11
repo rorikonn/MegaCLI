@@ -594,6 +594,10 @@ func (w *ClientWorkspace) DisableDockerMCP() error {
 	return w.client.DisableDockerMCP(context.Background(), w.workspaceID())
 }
 
+func (w *ClientWorkspace) RetryFailedMCPs(ctx context.Context) (int, []error) {
+	return 0, nil
+}
+
 // -- Lifecycle --
 
 func (w *ClientWorkspace) Subscribe(program *tea.Program) {

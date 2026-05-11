@@ -293,6 +293,44 @@ func DisableSingle(cfg *config.ConfigStore, name string) error {
 	return nil
 }
 
+// RetryFailedMCPs retries connecting to all MCP servers that are in an error
+// state. It returns the number of successfully reconnected MCPs.
+func RetryFailedMCPs(ctx context.Context, cfg *config.ConfigStore) (int, []error) {
+	var (
+		mu      sync.Mutex
+		success int
+		errs    []error
+		wg      sync.WaitGroup
+	)
+
+	for name, m := range cfg.Config().MCP {
+		if m.Disabled {
+			continue
+		}
+		state, ok := states.Get(name)
+		if !ok || state.State != StateError {
+			continue
+		}
+
+		wg.Go(func() {
+			if err := initClient(ctx, cfg, name, m, cfg.Resolver()); err != nil {
+				slog.Debug("MCP retry failed", "name", name, "error", err)
+				mu.Lock()
+				errs = append(errs, fmt.Errorf("%s: %w", name, err))
+				mu.Unlock()
+				return
+			}
+			slog.Info("MCP retry succeeded", "name", name)
+			mu.Lock()
+			success++
+			mu.Unlock()
+		})
+	}
+	wg.Wait()
+
+	return success, errs
+}
+
 func getOrRenewClient(ctx context.Context, cfg *config.ConfigStore, name string) (*ClientSession, error) {
 	sess, ok := sessions.Get(name)
 	if !ok {

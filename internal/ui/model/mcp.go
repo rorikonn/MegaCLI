@@ -17,8 +17,16 @@ func (m *UI) mcpInfo(width, maxItems int, isSection bool) string {
 	var mcps []mcp.ClientInfo
 	t := m.com.Styles
 
-	for _, mcp := range m.com.Config().MCP.Sorted() {
-		if state, ok := m.mcpStates[mcp.Name]; ok {
+	// Use pubsub-delivered states if available, otherwise fall back to the
+	// global snapshot. This handles the race where MCP initialization
+	// completes before the TUI subscribes to events.
+	states := m.mcpStates
+	if len(states) == 0 {
+		states = mcp.GetStates()
+	}
+
+	for _, mcpCfg := range m.com.Config().MCP.Sorted() {
+		if state, ok := states[mcpCfg.Name]; ok {
 			mcps = append(mcps, state)
 		}
 	}
