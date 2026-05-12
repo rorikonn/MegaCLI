@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -198,20 +199,36 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 	}
 	systemPrompt := a.systemPrompt.Get()
 	promptPrefix := a.systemPromptPrefix.Get()
-	var instructions strings.Builder
 
-	for _, server := range mcp.GetStates() {
-		if server.State != mcp.StateConnected {
+	// Build per-server MCP instructions and prepend them to the system
+	// prompt so that core instructions (skills, context files, etc.)
+	// retain recency priority. Each server block is attributed and
+	// scoped to its own tools.
+	mcpStates := mcp.GetStates()
+	var serverNames []string
+	for name, info := range mcpStates {
+		if info.State != mcp.StateConnected {
 			continue
 		}
-		if s := server.Client.InitializeResult().Instructions; s != "" {
-			instructions.WriteString(s)
-			instructions.WriteString("\n\n")
+		if s := info.Client.InitializeResult().Instructions; s != "" && strings.TrimSpace(s) != "" {
+			serverNames = append(serverNames, name)
 		}
 	}
 
-	if s := instructions.String(); s != "" {
-		systemPrompt += "\n\n<mcp-instructions>\n" + s + "\n</mcp-instructions>"
+	if len(serverNames) > 0 {
+		sort.Strings(serverNames)
+		var mcpBlock strings.Builder
+		mcpBlock.WriteString("<mcp-instructions>\n")
+		for _, name := range serverNames {
+			info := mcpStates[name]
+			instr := strings.TrimSpace(info.Client.InitializeResult().Instructions)
+			fmt.Fprintf(&mcpBlock, "<server name=%q>\n", name)
+			mcpBlock.WriteString(instr)
+			fmt.Fprintf(&mcpBlock, "\nThese instructions apply ONLY when using tools prefixed with %q.\n", "mcp_"+name+"_")
+			mcpBlock.WriteString("</server>\n\n")
+		}
+		mcpBlock.WriteString("</mcp-instructions>")
+		systemPrompt = mcpBlock.String() + "\n\n" + systemPrompt
 	}
 
 	if len(agentTools) > 0 {
